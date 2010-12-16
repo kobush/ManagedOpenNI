@@ -1,0 +1,10 @@
+﻿<Window x:Class="SceneViewerWPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:helix="clr-namespace:HelixToolkit;assembly=HelixToolkit" xmlns:local="clr-namespace:SceneViewerWPF" Title="MainWindow" Height="350" Width="525">
+    <Grid>
+        <helix:HelixView3D>
+            <helix:DefaultLightsVisual3D />
+            <local:PointCloud x:Name="pointCloud"/>
+        </helix:HelixView3D>
+    </Grid>
+</Window>

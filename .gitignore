@@ -1,0 +1,12 @@
+obj
+bin
+Debug
+deploy
+deploy/*
+_ReSharper.*
+*.user
+*.resharper
+*.suo
+*.cache
+*.opensdf
+~$*
