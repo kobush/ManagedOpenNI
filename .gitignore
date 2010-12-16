@@ -10,6 +10,7 @@ _ReSharper.*
 *.suo
 *.cache
 *.opensdf
+*.sdf
 ~$*
 
 #ignore thumbnails created by windows

@@ -1,1 +1,14 @@
-README
+This is early proof-of-concept implementation. The goal is to provide access to OpenNI classes 
+that are currently not available in ManagedNite.dll. In particular to generator nodes such as
+ImageGenerator, DepthGenerator and ScaneAnalyzer. 
+
+Short term todo:
+- The library should be renamed to ManagedOpenNI.dll (or maybe SharpOpenNI, nOpenNI?)
+- The namespace should be renamed to ManagedOpenNI (or just OpenNI)
+- Drop the XnM prefix from class names.
+- Add missing functions.
+
+For more information about OpenNI go to http://www.openni.org/
+And join these discussion groups:
+http://groups.google.com/group/openni-dev
+http://groups.google.com/group/openkinect

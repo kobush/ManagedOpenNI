@@ -39,9 +39,6 @@
     <Reference Include="HelixToolkit">
       <HintPath>..\..\..\_CodePlex\HelixToolkit\trunk\Source\HelixToolkit\bin\Debug\HelixToolkit.dll</HintPath>
     </Reference>
-    <Reference Include="ManagedNiteEx">
-      <HintPath>..\Debug\ManagedNiteEx.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
@@ -104,6 +101,12 @@
     <Content Include="openNi.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ManagedNiteEx\ManagedNiteEx.vcxproj">
+      <Project>{6AAA556D-B18B-43E7-964D-AB90521D2012}</Project>
+      <Name>ManagedNiteEx</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

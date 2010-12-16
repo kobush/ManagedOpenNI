@@ -34,6 +34,8 @@ namespace NiSimpleViewerWPF
 
         void OnTracker_UpdateViewPort(object sender, EventArgs e)
         {
+            waitText.Visibility = Visibility.Collapsed;
+
             image.Source = _tracker.RgbImageSource;
             depth.Source = _tracker.DepthImageSource;
             scene.Source = _tracker.SceneImageSource;
