@@ -39,8 +39,10 @@
     <Reference Include="HelixToolkit">
       <HintPath>..\..\..\_CodePlex\HelixToolkit\trunk\Source\HelixToolkit\bin\Debug\HelixToolkit.dll</HintPath>
     </Reference>
+    <Reference Include="SlimDX, Version=4.0.10.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86" />
     <Reference Include="System" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
@@ -62,10 +64,19 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Compile Include="..\NiSimpleViewerWPF\FrameCounter.cs">
+      <Link>FrameCounter.cs</Link>
+    </Compile>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="D3DExtensions.xaml.cs" />
+    <Compile Include="D3DImageSlimDX.cs" />
+    <Compile Include="DxCamera.cs" />
+    <Compile Include="DxCube.cs" />
+    <Compile Include="DxEffect.cs" />
+    <Compile Include="DxScene.cs" />
     <Compile Include="KinectTracker.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
@@ -96,6 +107,9 @@
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
     <AppDesigner Include="Properties\" />
+    <Content Include="scene.fx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Content Include="openNi.xml">

@@ -1,10 +1,30 @@
 ﻿<Window x:Class="SceneViewerWPF.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:helix="clr-namespace:HelixToolkit;assembly=HelixToolkit" xmlns:local="clr-namespace:SceneViewerWPF" Title="MainWindow" Height="350" Width="525">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+        xmlns:helix="clr-namespace:HelixToolkit;assembly=HelixToolkit" 
+        xmlns:local="clr-namespace:SceneViewerWPF" Title="MainWindow" Height="350" Width="525"
+        UseLayoutRounding="True">
     <Grid>
-        <helix:HelixView3D>
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        
+        <Image x:Name="dxImage" Stretch="None" SizeChanged="D3DImage_SizeChanged"
+               SnapsToDevicePixels="True"
+               HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        <helix:HelixView3D x:Name="helixView" SnapsToDevicePixels="True">
             <helix:DefaultLightsVisual3D />
             <local:PointCloud x:Name="pointCloud"/>
         </helix:HelixView3D>
+
+        <Border Padding="5" Grid.Row="1" 
+                Background="{StaticResource {x:Static SystemColors.ControlBrushKey}}">
+            <StackPanel Orientation="Horizontal" 
+                        >
+                <TextBlock Text="Render FPS: " />
+                <TextBlock x:Name="textFrameRate" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

@@ -1,11 +1,13 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace NiSimpleViewerWPF
 {
     public class FrameCounter
     {
-        private int _frameCount;
+        private long _frameCount;
         private long _lastFrameTime;
+        private Stopwatch _timer;
 
         public FrameCounter()
         {
@@ -14,10 +16,14 @@ namespace NiSimpleViewerWPF
 
         public double FramesPerSecond { get; private set; }
 
+        public long FrameCount { get { return _frameCount; } }
+
         public void Reset()
         {
+            _timer = Stopwatch.StartNew();
+
             _frameCount = 0;
-            _lastFrameTime = DateTime.Now.Ticks;
+            _lastFrameTime = _timer.ElapsedMilliseconds;
             FramesPerSecond = 0.0;
         }
 
@@ -25,8 +31,9 @@ namespace NiSimpleViewerWPF
         {
             // update frame counter
             _frameCount++;
-            var nowTime = DateTime.Now.Ticks;
-            double milliseconds = (nowTime - _lastFrameTime) / (double)TimeSpan.TicksPerMillisecond;
+
+            long nowTime = _timer.ElapsedMilliseconds;
+            long milliseconds = (nowTime - _lastFrameTime);
             if (milliseconds >= 1000)
             {
                 FramesPerSecond = _frameCount * 1000.0 / milliseconds;
