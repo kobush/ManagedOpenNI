@@ -76,6 +76,7 @@
     <Compile Include="DxCamera.cs" />
     <Compile Include="DxCube.cs" />
     <Compile Include="DxEffect.cs" />
+    <Compile Include="DxKinectPointsCloud.cs" />
     <Compile Include="DxScene.cs" />
     <Compile Include="KinectTracker.cs" />
     <Compile Include="MainWindow.xaml.cs">

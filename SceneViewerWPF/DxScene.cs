@@ -20,6 +20,7 @@ namespace SceneViewerWPF
         private Font _dxFont;
         private DxEffect _dxEffect;
         private DxCube _dxCube;
+        private DxKinectPointsCloud _dxKinectPoints;
 
         public int ClientHeight { get; set; }
         public int ClientWidth { get; set; }
@@ -67,6 +68,7 @@ namespace SceneViewerWPF
 
             _dxEffect = new DxEffect(_dxDevice);
             _dxCube = new DxCube(_dxDevice);
+            _dxKinectPoints = new DxKinectPointsCloud(_dxDevice);
 
             _dxDevice.Flush();
         }
@@ -151,6 +153,7 @@ namespace SceneViewerWPF
         {
             _dxCube.Dispose();
             _dxEffect.Dispose();
+            _dxKinectPoints.Dispose();
 
 
             if (_dxFont != null)
@@ -214,10 +217,13 @@ namespace SceneViewerWPF
             
             Camera.Update(ClientWidth, ClientHeight);
             _dxEffect.Prepare(Camera.View, Camera.Projection);
-            _dxCube.Prepare();
+            _dxEffect.Render(world);
 
-            var xRes = 20;
-            var yRes = 20;
+            _dxKinectPoints.Render();
+/*
+            _dxCube.Prepare();
+            var xRes = 30;
+            var yRes = 30;
 
             for (int x = 0; x < xRes; x++)
             {
@@ -232,6 +238,7 @@ namespace SceneViewerWPF
                     _dxCube.Render();
                 }
             }
+*/
 
 
 /*
@@ -243,11 +250,18 @@ namespace SceneViewerWPF
             _dxDevice.Flush();
         }
 
+        public DxKinectPointsCloud PointsCloud
+        {
+            get { return _dxKinectPoints; }
+        }
+
         private void SetRasterizationParameters()
         {
             var rsd = new RasterizerStateDescription
                           {
-                              CullMode = CullMode.Front,
+                              //IsAntialiasedLineEnabled = true,
+                              IsFrontCounterclockwise = true,
+                              CullMode = CullMode.Back,
                               FillMode = FillMode.Solid,
                           };
             RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);

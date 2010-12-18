@@ -86,6 +86,8 @@ namespace SceneViewerWPF
 
         public void Render()
         {
+            // drawindexedinstanced
+
             _dxDevice.DrawIndexed(36, 0, 0);
         }
 

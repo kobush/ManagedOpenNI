@@ -30,6 +30,7 @@ namespace SceneViewerWPF
 
         void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+
             _dxImageContainer = new D3DImageSlimDX();
             _dxImageContainer.IsFrontBufferAvailableChanged += _D3DImageContainer_IsFrontBufferAvailableChanged;
 
@@ -39,15 +40,42 @@ namespace SceneViewerWPF
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
             BeginRenderingScene();
 
-            /*
-                        _kinectTracker = new KinectTracker();
-                        _kinectTracker.StartTracking(pointCloud);
-            */
+            // setup tracker
+            _kinectTracker = new KinectTracker();
+            _kinectTracker.TrackinkgStarted += OnKinectTrackinkgStarted;
+            _kinectTracker.TrackingUpdated += OnKinectTrackingUpdated;
+            _kinectTracker.TrackinkgCompleted += OnKinectTrackingCompleted;
+            _kinectTracker.StartTracking();
+        }
+
+        void OnKinectTrackinkgStarted(object sender, EventArgs e)
+        {
+            if (_dxScene == null) return;
+            _dxScene.PointsCloud.Init(((KinectTracker)sender).CurrentData);
+        }
+
+        private void OnKinectTrackingUpdated(object sender, EventArgs e)
+        {
+            if (_dxScene == null) return;
+            _dxScene.PointsCloud.Update(((KinectTracker)sender).CurrentData);
+        }
+
+        private void OnKinectTrackingCompleted(object sender, EventArgs e)
+        {
+            
         }
 
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            _kinectTracker.StopTracking();
+
             StopRenderingScene();
+
+            if (_dxScene != null)
+            {
+                _dxScene.Dispose();
+                _dxScene = null;
+            }
 
             if (_dxImageContainer != null)
             {
@@ -96,6 +124,7 @@ namespace SceneViewerWPF
 
             SlimDX.Direct3D10.Texture2D lastTexture = _dxScene.SharedTexture;
 
+            // sync view with position of the WPF camera from HelixView
             _dxScene.Camera.SetFromWpfCamera((PerspectiveCamera) helixView.Camera);
 
             _dxScene.Render(time.Milliseconds, (int)helixView.ActualWidth, (int)helixView.ActualHeight);

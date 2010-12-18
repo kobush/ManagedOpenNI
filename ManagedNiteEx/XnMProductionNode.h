@@ -15,6 +15,10 @@ namespace ManagedNiteEx
 	public:
 		XnMNodeInfo^ GetNodeInfo();
 
+		System::UInt64 GetIntProperty(String^ name);
+		System::Double GetRealProperty(String^ name);
+		System::String^ GetStringProperty(String^ name);
+
 	private:
 		~XnMProductionNode() {
 			if (0 != m_pNode && m_bShouldDelete)
