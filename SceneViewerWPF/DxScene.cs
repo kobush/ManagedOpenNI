@@ -18,7 +18,7 @@ namespace SceneViewerWPF
         private DepthStencilView _dxDepthStencilView;
         
         private Font _dxFont;
-        private DxEffect _dxEffect;
+        //private DxEffect _dxEffect;
         private DxCube _dxCube;
         private DxKinectPointsCloud _dxKinectPoints;
 
@@ -66,7 +66,7 @@ namespace SceneViewerWPF
 
             _dxFont = new Font(_dxDevice, fontDesc);
 
-            _dxEffect = new DxEffect(_dxDevice);
+//            _dxEffect = new DxEffect(_dxDevice);
             _dxCube = new DxCube(_dxDevice);
             _dxKinectPoints = new DxKinectPointsCloud(_dxDevice);
 
@@ -152,7 +152,7 @@ namespace SceneViewerWPF
         private void DestroyD3D()
         {
             _dxCube.Dispose();
-            _dxEffect.Dispose();
+            //_dxEffect.Dispose();
             _dxKinectPoints.Dispose();
 
 
@@ -216,10 +216,12 @@ namespace SceneViewerWPF
             var world = Matrix.Identity;
             
             Camera.Update(ClientWidth, ClientHeight);
+/*
             _dxEffect.Prepare(Camera.View, Camera.Projection);
             _dxEffect.Render(world);
+*/
 
-            _dxKinectPoints.Render();
+            _dxKinectPoints.Render(Camera);
 /*
             _dxCube.Prepare();
             var xRes = 30;
