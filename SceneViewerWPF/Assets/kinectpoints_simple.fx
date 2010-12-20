@@ -11,18 +11,20 @@ cbuffer cbPerFrame {
 	matrix	gViewProj;
 };
 
+Texture2D gImageMap;
 
-//Texture2DArray gDiffuseMapArray;
+SamplerState gTriLinearSam
+{
+	Filter = MIN_MAG_MIP_POINT;
+	AddressU = Border;
+	AddressV = Border;
+};
 
 struct VS_IN
 {
-/*	
 	float3 centerW : POSITION;
 	float2 sizeW : SIZE;
-	float4 color : COLOR;
-	*/
-	float4 centerW : POSITION;
-	float4 color : COLOR;
+	float2 texC : TEXCOORD;
 };
 
 //--------------------------------------------------------------------------------------
@@ -30,7 +32,7 @@ struct VS_OUT
 {
     float3 centerW : POSITION;
 	float2 sizeW : SIZE;
-    float4 color : COLOR;
+    float2 texC : TEXCOORD;
 };
 
 struct GS_OUT
@@ -51,9 +53,9 @@ VS_OUT VS(VS_IN vIn)
 	VS_OUT vOut;
 	
 	// Just pass same data into geometry shader stage. 
-    vOut.centerW = vIn.centerW;	// implicit truncation
-	vOut.sizeW = float2(vIn.centerW.w, vIn.centerW.w);
-	vOut.color = vIn.color;
+    vOut.centerW = vIn.centerW;	
+	vOut.sizeW = vIn.sizeW;
+	vOut.texC = vIn.texC;
     return vOut;
 }
 
@@ -65,6 +67,12 @@ void GS(point VS_OUT gIn[1],
 	uint primID : SV_PrimitiveID,
 	inout TriangleStream<GS_OUT> triStream)
 {
+	[branch]
+	if (gIn[0].centerW.z == 0) // skip not visible points
+	{
+		return;
+	}
+
 	// Compute 4 triangle strip vertices (quad) in local space.
 	// The quad faces down the +z axis in local space.
 	//
@@ -100,6 +108,7 @@ void GS(point VS_OUT gIn[1],
 	W[3] = float4(gIn[0].centerW, 1.0f);
 	float4x4 WVP = mul(W, gViewProj);
 
+	float c = 1.0 - gIn[0].centerW.z / 1000.0;
 	//
 	// Transform quad vertices to world space and output
 	// them as a triangle strip.
@@ -111,8 +120,8 @@ void GS(point VS_OUT gIn[1],
 		gOut.posH = mul(v[i], WVP);
 		gOut.posW = mul(v[i], W); // implicit truncation
 		gOut.normalW = look;
-		gOut.texC = texC[i];
-		gOut.diffuse = gIn[0].color;
+		gOut.texC = gIn[0].texC; //texC[i];
+		gOut.diffuse = float4(c, c, 0.0f, 1.0);
 		gOut.primID = primID;
 		triStream.Append(gOut);
 	}
@@ -123,42 +132,50 @@ void GS(point VS_OUT gIn[1],
 //--------------------------------------------------------------------------------------
 float4 PS( GS_OUT pIn) : SV_Target
 {
-	float4 diffuse = pIn.diffuse;
+	//float4 diffuse = pIn.diffuse;
+	float2 uv = pIn.texC;
+	float4 diffuse = gImageMap.Sample( gTriLinearSam, uv );
+
+	// get color from texture
 	if (gFillColor.w > 0.5)
 		diffuse = gFillColor;
 	
-	float4 spec = float4(0, 0, 0, 0);
-
+	[branch]
 	if (gLight.type == 0)
 	{
-		// no lighting return input color
+		// no lighting so just return input color
 		return diffuse;
 	}
-
-	float3 litColor;
-
-	// Interpolating normal can make it not be of unit length so
-	// normalize it.
-	pIn.normalW = normalize(pIn.normalW);
-
-	// set surface info struct
-	SurfaceInfo v = {pIn.posW, pIn.normalW, diffuse, spec};
-
-	if( gLight.type == 1 ) // Parallel
+	else 
 	{
-		litColor = ParallelLight(v, gLight, gEyePosW);
-	}
-	else if( gLight.type == 2 ) // Point
-	{
-		litColor = PointLight(v, gLight, gEyePosW);
-	}
-	else if( gLight.type == 3 ) // Spot
-	{
-		litColor = Spotlight(v, gLight, gEyePosW);
-	}
+		// use lighting method
 
-	return float4(litColor, diffuse.a);
-    
+		float4 spec = float4(0, 0, 0, 0);
+
+		float3 litColor;
+
+		// Interpolating normal can make it not be of unit length so
+		// normalize it.
+		pIn.normalW = normalize(pIn.normalW);
+
+		// set surface info struct
+		SurfaceInfo v = {pIn.posW, pIn.normalW, diffuse, spec};
+
+		if( gLight.type == 1 ) // Parallel
+		{
+			litColor = ParallelLight(v, gLight, gEyePosW);
+		}
+		else if( gLight.type == 2 ) // Point
+		{
+			litColor = PointLight(v, gLight, gEyePosW);
+		}
+		else if( gLight.type == 3 ) // Spot
+		{
+			litColor = Spotlight(v, gLight, gEyePosW);
+		}
+
+		return float4(litColor, diffuse.a);
+	}
 }
 
 
