@@ -2,12 +2,17 @@
 // Constant Buffer Variables
 //--------------------------------------------------------------------------------------
 
-//Light gLight
-float3 gEyePosW;
-matrix gViewProj;
+#include "lighthelper.fx"
+
+cbuffer cbPerFrame {
+	Light	gLight;
+	float3	gEyePosW;
+	float4	gFillColor;
+	matrix	gViewProj;
+};
+
 
 //Texture2DArray gDiffuseMapArray;
-
 
 struct VS_IN
 {
@@ -34,7 +39,7 @@ struct GS_OUT
 	float3 posW : POSITION;
 	float3 normalW : NORMAL;
 	float2 texC : TEXCOORD;
-	float4 color : COLOR;
+	float4 diffuse : DIFFUSE;
 	uint primID : SV_PrimitiveID;
 };
 
@@ -84,7 +89,7 @@ void GS(point VS_OUT gIn[1],
 	//
 	float3 up = float3(0.0f, 1.0f, 0.0f);
 	float3 look = gEyePosW - gIn[0].centerW;
-	look.y = 0.0f; // y-axis aligned, so project to xz-plane
+//	look.y = 0.0f; // y-axis aligned, so project to xz-plane
 	look = normalize(look);
 	float3 right = cross(up, look);
 	
@@ -95,7 +100,6 @@ void GS(point VS_OUT gIn[1],
 	W[3] = float4(gIn[0].centerW, 1.0f);
 	float4x4 WVP = mul(W, gViewProj);
 
-	float4 color = gIn[0].color;
 	//
 	// Transform quad vertices to world space and output
 	// them as a triangle strip.
@@ -108,7 +112,7 @@ void GS(point VS_OUT gIn[1],
 		gOut.posW = mul(v[i], W); // implicit truncation
 		gOut.normalW = look;
 		gOut.texC = texC[i];
-		gOut.color = color;
+		gOut.diffuse = gIn[0].color;
 		gOut.primID = primID;
 		triStream.Append(gOut);
 	}
@@ -119,7 +123,42 @@ void GS(point VS_OUT gIn[1],
 //--------------------------------------------------------------------------------------
 float4 PS( GS_OUT pIn) : SV_Target
 {
-    return pIn.color;
+	float4 diffuse = pIn.diffuse;
+	if (gFillColor.w > 0.5)
+		diffuse = gFillColor;
+	
+	float4 spec = float4(0, 0, 0, 0);
+
+	if (gLight.type == 0)
+	{
+		// no lighting return input color
+		return diffuse;
+	}
+
+	float3 litColor;
+
+	// Interpolating normal can make it not be of unit length so
+	// normalize it.
+	pIn.normalW = normalize(pIn.normalW);
+
+	// set surface info struct
+	SurfaceInfo v = {pIn.posW, pIn.normalW, diffuse, spec};
+
+	if( gLight.type == 1 ) // Parallel
+	{
+		litColor = ParallelLight(v, gLight, gEyePosW);
+	}
+	else if( gLight.type == 2 ) // Point
+	{
+		litColor = PointLight(v, gLight, gEyePosW);
+	}
+	else if( gLight.type == 3 ) // Spot
+	{
+		litColor = Spotlight(v, gLight, gEyePosW);
+	}
+
+	return float4(litColor, diffuse.a);
+    
 }
 
 

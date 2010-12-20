@@ -2,8 +2,10 @@
 using System.Diagnostics;
 using System.Timers;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
+using HelixToolkit;
 using NiSimpleViewerWPF;
 using SlimDX.Windows;
 
@@ -30,7 +32,6 @@ namespace SceneViewerWPF
 
         void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-
             _dxImageContainer = new D3DImageSlimDX();
             _dxImageContainer.IsFrontBufferAvailableChanged += _D3DImageContainer_IsFrontBufferAvailableChanged;
 
@@ -38,6 +39,13 @@ namespace SceneViewerWPF
 
             _dxScene = new DxScene();
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
+
+            helixView.Camera.Position = new Point3D(0,25,-100);
+            helixView.Camera.LookDirection = new Point3D(0, 0, 100) - helixView.Camera.Position;
+            helixView.Camera.UpDirection = new Vector3D(0,1,0);
+            helixView.CameraChanged += delegate { UpdateCameraDisplay(); };
+            UpdateCameraDisplay();
+
             BeginRenderingScene();
 
             // setup tracker
@@ -124,9 +132,6 @@ namespace SceneViewerWPF
 
             SlimDX.Direct3D10.Texture2D lastTexture = _dxScene.SharedTexture;
 
-            // sync view with position of the WPF camera from HelixView
-            _dxScene.Camera.SetFromWpfCamera((PerspectiveCamera) helixView.Camera);
-
             _dxScene.Render(time.Milliseconds, (int)helixView.ActualWidth, (int)helixView.ActualHeight);
 
             // output buffer could change because of size change
@@ -141,9 +146,30 @@ namespace SceneViewerWPF
             textFrameRate.Text = _frameCounter.FramesPerSecond.ToString("f1");
         }
 
+        private void UpdateCameraDisplay()
+        {
+            var camera = (PerspectiveCamera) helixView.Camera;
+
+            cameraDir.Text = camera.LookDirection.Format("f1");
+            cameraEye.Text = camera.Position.Format("f1");
+            cameraUp.Text = camera.UpDirection.Format("f1");
+
+            if (_dxScene != null)
+            {
+                // sync view with position of the WPF camera from HelixView
+                _dxScene.Camera.SetFromWpfCamera(camera);
+            }
+        }
+
         private void D3DImage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
 
+        }
+
+        private void OnCameraModeSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            var item = (ComboBoxItem)cameraMode.SelectedItem;
+            helixView.CameraMode = (CameraMode) item.Tag;
         }
     }
 }

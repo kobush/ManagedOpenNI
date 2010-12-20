@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 using SlimDX;
 using SlimDX.D3DCompiler;
 using SlimDX.Direct3D10;
@@ -20,9 +19,12 @@ namespace SceneViewerWPF
         private Effect _effect;
         private EffectTechnique _technique;
         private EffectPass _effectPass;
+        private InputLayout _inputLayout;
         private EffectVectorVariable _eyePosWVariable;
         private EffectMatrixVariable _viewProjVariable;
-        private InputLayout _inputLayout;
+        private EffectVariable _lightVariable;
+        private EffectVectorVariable _fillColorVariable;
+        private DxLight _light;
 
         public DxKinectPointsCloud(Device dxDevice)
         {
@@ -37,6 +39,19 @@ namespace SceneViewerWPF
             _yRes = data.YRes;
 
             CreateVertexBuffer();
+
+            _light = new DxLight
+            {
+                Type = DxLightType.None,
+                Position = new Vector3(0, 0, 0),
+                Direction = new Vector3(0, 0, -1),
+                Ambient = new Vector4(0.4f, 0.4f, 0.4f, 1.0f),
+                Diffuse = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+                Specular = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+                Attenuation = new Vector3(0.0f, 1.0f, 0.0f),
+                SpotPower = 64f,
+                Range = 10000f
+            };
         }
 
 
@@ -50,6 +65,9 @@ namespace SceneViewerWPF
 
             _eyePosWVariable = _effect.GetVariableByName("gEyePosW").AsVector();
             _viewProjVariable = _effect.GetVariableByName("gViewProj").AsMatrix();
+            
+            _fillColorVariable = _effect.GetVariableByName("gFillColor").AsVector();
+            _lightVariable = _effect.GetVariableByName("gLight");
 
             ShaderSignature signature = _effectPass.Description.Signature;
 /*
@@ -66,6 +84,8 @@ namespace SceneViewerWPF
                     new InputElement("COLOR", 0, SlimDX.DXGI.Format.R32G32B32A32_Float, 16, 0) // 4*4 -> 36
             });
         }
+
+
 
 /*        [StructLayout(LayoutKind.Sequential)]
         public struct PointVertex
@@ -115,9 +135,9 @@ namespace SceneViewerWPF
                     if (depth != 0)
                     {
                         var pixelSize = depth*zeroPlanePixelSize*scale/f;
-                        var pX = (u - 320) * pixelSize;
-                        var pY = (v - 240) * pixelSize;
-                        var pZ = -depth * scale; 
+                        var pX = (u - _xRes/2f) * pixelSize;
+                        var pY = (_yRes/2f - v) * pixelSize;
+                        var pZ = depth * scale; // scale depth from mm to cm!
 /*
                     var pX = _xRes / 2f - x; // mirror
                     var pY = y - _yRes/2f;
@@ -127,7 +147,8 @@ namespace SceneViewerWPF
                         point.Position = new Vector3(pX, pY, pZ);
                         point.PixelSize = new Vector2(pixelSize, pixelSize);
 */
-                        _vertices[vertexPtr++] = new Vector4(pX, pY, pZ, pixelSize * 1.1f);
+                        _vertices[vertexPtr++] = new Vector4(pX, pY, pZ, 
+                            pixelSize * 1.2f); // add small overlap
 
                         var r = data.ImageMap[imagePtr++]/255f; // R
                         var g = data.ImageMap[imagePtr++]/255f; // G
@@ -156,8 +177,20 @@ namespace SceneViewerWPF
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
+            _light.SetEffectVariable(_lightVariable);
+
             _eyePosWVariable.Set(camera.Eye);
-            _viewProjVariable.SetMatrix(camera.View * camera.Projection);
+            _viewProjVariable.SetMatrix(camera.View*camera.Projection);
+            //_fillColorVariable.Set(new Vector4(1.0f, 0.2f, 0.2f, 1.0f));
+
+/*            using (DataStream lightStream = _perFrameBuffer.Map(MapMode.WriteDiscard, MapFlags.None))
+            {
+                lightStream.Write(light);
+                lightStream.Position = 0; // rewind
+            }
+
+            _perFrameVariable.SetConstantBuffer(_perFrameBuffer);*/
+
             _effectPass.Apply();
 
             _dxDevice.InputAssembler.SetInputLayout(_inputLayout);

@@ -74,7 +74,9 @@ namespace SlimDX.Windows
                 if (Handle == IntPtr.Zero)
                     throw new ArgumentNullException("Handle");
 
-                SharedTexture = new Texture(D3DDevice, Texture.Description.Width, Texture.Description.Height, 1, Usage.RenderTarget, format, Pool.Default, ref Handle);
+                SharedTexture = new Texture(D3DDevice, Texture.Description.Width, Texture.Description.Height, 1, 
+                    Usage.RenderTarget, format, Pool.Default, ref Handle);
+
                 using (Surface Surface = SharedTexture.GetSurfaceLevel(0))
                 {
                     Lock();
@@ -97,10 +99,25 @@ namespace SlimDX.Windows
                 pp.SwapEffect = SwapEffect.Discard;
                 pp.DeviceWindowHandle = GetDesktopWindow();
                 pp.PresentationInterval = PresentInterval.Immediate;
-                pp.Multisample = MultisampleType.FourSamples;
+                pp.Multisample = MultisampleType.None;
                 pp.MultisampleQuality = 0;
 
-                D3DDevice = new DeviceEx(D3DContext, 0, DeviceType.Hardware, IntPtr.Zero, 
+                var format = Format.A8R8G8B8;
+                var adapter = 0;
+
+                // check for 4xAA
+                if (D3DContext.CheckDeviceMultisampleType(adapter, DeviceType.Hardware, format, true, MultisampleType.FourSamples))
+                {
+                    pp.Multisample = MultisampleType.FourSamples;
+                }
+                // check fo 2xAA
+                else if (D3DContext.CheckDeviceMultisampleType(adapter, DeviceType.Hardware, format, true, MultisampleType.TwoSamples))
+                {
+                    pp.Multisample = MultisampleType.TwoSamples;
+                }
+
+
+                D3DDevice = new DeviceEx(D3DContext, adapter, DeviceType.Hardware, IntPtr.Zero, 
                     CreateFlags.HardwareVertexProcessing | CreateFlags.Multithreaded | CreateFlags.FpuPreserve, pp);
             }
         }
@@ -129,19 +146,17 @@ namespace SlimDX.Windows
             }
         }
 
-        IntPtr GetSharedHandle(SlimDX.Direct3D10.Texture2D Texture)
+        static IntPtr GetSharedHandle(SlimDX.Direct3D10.Texture2D texture)
         {
-            SlimDX.DXGI.Resource resource = new SlimDX.DXGI.Resource(Texture);
-            IntPtr result = resource.SharedHandle;
-
-            resource.Dispose();
-
-            return result;
+            using (var resource = new SlimDX.DXGI.Resource(texture))
+            {
+                return resource.SharedHandle;
+            }
         }
 
-        Format TranslateFormat(SlimDX.Direct3D10.Texture2D Texture)
+        static Format TranslateFormat(SlimDX.Direct3D10.Texture2D texture)
         {
-            switch (Texture.Description.Format)
+            switch (texture.Description.Format)
             {
                 case SlimDX.DXGI.Format.R10G10B10A2_UNorm:
                     return SlimDX.Direct3D9.Format.A2B10G10R10;
@@ -157,7 +172,7 @@ namespace SlimDX.Windows
             }
         }
 
-        bool IsShareable(SlimDX.Direct3D10.Texture2D Texture)
+        static bool IsShareable(SlimDX.Direct3D10.Texture2D Texture)
         {
             return (Texture.Description.OptionFlags & SlimDX.Direct3D10.ResourceOptionFlags.Shared) != 0;
         }

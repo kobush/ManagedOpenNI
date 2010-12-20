@@ -107,7 +107,14 @@ namespace SceneViewerWPF
                 }
 
                 SharedTexture = new Texture2D(_dxDevice, colordesc);
-                _dxRenderView = new RenderTargetView(_dxDevice, SharedTexture);
+
+                var descRtv = new RenderTargetViewDescription();
+                if (colordesc.SampleDescription.Count > 1)
+                    descRtv.Dimension = RenderTargetViewDimension.Texture2DMultisampled;
+                else
+                    descRtv.Dimension = RenderTargetViewDimension.Texture2D;
+
+                _dxRenderView = new RenderTargetView(_dxDevice, SharedTexture, descRtv);
             }
 
 
@@ -121,7 +128,7 @@ namespace SceneViewerWPF
                     DepthTexture = null;
                 }
 
-                var depthdesc = new Texture2DDescription
+                var depthDesc = new Texture2DDescription
                                     {
                                         BindFlags = BindFlags.DepthStencil,
                                         Format = Format.D32_Float_S8X24_UInt,
@@ -136,7 +143,7 @@ namespace SceneViewerWPF
                                     };
 
                 // create depth texture
-                DepthTexture = new Texture2D(_dxDevice, depthdesc);
+                DepthTexture = new Texture2D(_dxDevice, depthDesc);
 
                 if (_dxDepthStencilView != null)
                 {
@@ -144,8 +151,20 @@ namespace SceneViewerWPF
                     _dxDepthStencilView = null;
                 }
 
+                var descDsv = new DepthStencilViewDescription();
+                descDsv.Format = depthDesc.Format;
+                if (depthDesc.SampleDescription.Count > 1)
+                {
+                    descDsv.Dimension = DepthStencilViewDimension.Texture2DMultisampled;
+                }
+                else
+                {
+                    descDsv.Dimension = DepthStencilViewDimension.Texture2D;
+                }
+                descDsv.MipSlice = 0;
+
                 // create depth/stencil view
-                _dxDepthStencilView = new DepthStencilView(_dxDevice, DepthTexture);
+                _dxDepthStencilView = new DepthStencilView(_dxDevice, DepthTexture, descDsv);
             }
         }
 
@@ -262,8 +281,8 @@ namespace SceneViewerWPF
             var rsd = new RasterizerStateDescription
                           {
                               //IsAntialiasedLineEnabled = true,
-                              IsFrontCounterclockwise = true,
-                              CullMode = CullMode.Back,
+                              IsFrontCounterclockwise = false,
+                              CullMode = CullMode.None,
                               FillMode = FillMode.Solid,
                           };
             RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);
