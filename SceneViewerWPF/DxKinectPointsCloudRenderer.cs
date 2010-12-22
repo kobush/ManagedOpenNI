@@ -13,33 +13,82 @@ namespace SceneViewerWPF
     public class DxKinectPointsCloudRenderer : IDisposable
     {
         private readonly Device _dxDevice;
+
         private int _xRes;
         private int _yRes;
-        private Buffer _vertexBuffer;
         private int _vertexCount;
-        private PointVertex[] _vertices;
+        private Buffer _vertexBuffer;
 
         private Effect _effect;
-        private EffectTechnique _technique;
-        private EffectPass _effectPass;
+        private EffectTechnique _renderTech;
         private InputLayout _inputLayout;
-        private EffectVectorVariable _eyePosWVariable;
-        private EffectMatrixVariable _viewProjVariable;
-        private EffectVariable _lightVariable;
-        private EffectVectorVariable _fillColorVariable;
-        private DxLight _light;
+        private EffectVectorVariable _eyePosWVar;
+        private EffectMatrixVariable _viewProjVar;
 
         private Texture2D _imageTexture;
-        private ShaderResourceView _imageTextureView;
-        private EffectResourceVariable _imageMapVariable;
+        private ShaderResourceView _imageTextureRV;
+        private EffectResourceVariable _imageMapVar;
+
         private Buffer _depthMapBuffer;
         private ShaderResourceView _depthMapBufferRV;
+        private EffectResourceVariable _depthMapVar;
+
+        private float _zeroPlanePixelSize;
+        private float _zeroPlaneDistance;
+        private float _vertexScale;
+
+        private EffectScalarVariable _zeroPlanePixelSizeVar;
+        private EffectScalarVariable _zeroPlaneDistanceVar;
+        private EffectScalarVariable _scaleVar;
+        private EffectVectorVariable _resVar;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PointVertex
+        {
+            public short X;
+            public short Y;
+
+            public PointVertex(short x, short y)
+            {
+                X = x;
+                Y = y;
+            }
+
+            public static int SizeOf
+            {
+                get { return Marshal.SizeOf(typeof(PointVertex)); }
+            }
+        }
 
         public DxKinectPointsCloudRenderer(Device dxDevice)
         {
             _dxDevice = dxDevice;
 
             LoadEffect(@"Assets\kinectpoints_simple.fx");
+        }
+
+        private void LoadEffect(string shaderFileName)
+        {
+            _effect = Effect.FromFile(_dxDevice, shaderFileName, "fx_4_0",
+                                      ShaderFlags.None, EffectFlags.None, null, null);
+
+            _renderTech = _effect.GetTechniqueByName("Render"); //C++ Comparaison// technique = effect->GetTechniqueByName( "Render" );
+
+            _eyePosWVar = _effect.GetVariableByName("gEyePosW").AsVector();
+            _viewProjVar = _effect.GetVariableByName("gViewProj").AsMatrix();
+            
+            _imageMapVar = _effect.GetVariableByName("gImageMap").AsResource();
+            _depthMapVar = _effect.GetVariableByName("gDepthMap").AsResource();
+
+            _zeroPlanePixelSizeVar = _effect.GetVariableByName("gZeroPlanePixelSize").AsScalar();
+            _zeroPlaneDistanceVar = _effect.GetVariableByName("gZeroPlaneDistance").AsScalar();
+            _scaleVar = _effect.GetVariableByName("gScale").AsScalar();
+            _resVar = _effect.GetVariableByName("gRes").AsVector();
+
+            ShaderSignature signature = _renderTech.GetPassByIndex(0).Description.Signature;
+            _inputLayout = new InputLayout(_dxDevice, signature,
+                                           new[] { new InputElement("POSITION", 0, SlimDX.DXGI.Format.R16G16_SInt, 0, 0)
+                                                 });
         }
 
         public void Init(KinectData data)
@@ -49,69 +98,11 @@ namespace SceneViewerWPF
 
             CreateVertexBuffer();
             CreateTextures();
-
-            _light = new DxLight
-            {
-                Type = DxLightType.None,
-                Position = new Vector3(0, 0, 0),
-                Direction = new Vector3(0, 0, -1),
-                Ambient = new Vector4(0.4f, 0.4f, 0.4f, 1.0f),
-                Diffuse = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-                Specular = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-                Attenuation = new Vector3(0.0f, 1.0f, 0.0f),
-                SpotPower = 64f,
-                Range = 10000f
-            };
-        }
-
-
-        private void LoadEffect(string shaderFileName)
-        {
-            _effect = Effect.FromFile(_dxDevice, shaderFileName, "fx_4_0",
-               ShaderFlags.None, EffectFlags.None, null, null);
-
-            _technique = _effect.GetTechniqueByName("Render"); //C++ Comparaison// technique = effect->GetTechniqueByName( "Render" );
-            _effectPass = _technique.GetPassByIndex(0);
-
-            _eyePosWVariable = _effect.GetVariableByName("gEyePosW").AsVector();
-            _viewProjVariable = _effect.GetVariableByName("gViewProj").AsMatrix();
-            
-            _fillColorVariable = _effect.GetVariableByName("gFillColor").AsVector();
-            _lightVariable = _effect.GetVariableByName("gLight");
-
-            _imageMapVariable = _effect.GetVariableByName("gImageMap").AsResource();
-
-            ShaderSignature signature = _effectPass.Description.Signature;
-            _inputLayout = new InputLayout(_dxDevice, signature, 
-                new[] {
-                    new InputElement("POSITION", 0, SlimDX.DXGI.Format.R32G32B32_Float, 0, 0), // 3*4 = 12
-                    new InputElement("SIZE", 0, SlimDX.DXGI.Format.R32G32_Float, 12, 0),
-                    new InputElement("TEXCOORD", 0, SlimDX.DXGI.Format.R32G32_Float, 20, 0) // 4*4 -> 36
-            });
-/*
-            _inputLayout = new InputLayout(_dxDevice, signature,
-                new[] {
-                    new InputElement("POSITION", 0, SlimDX.DXGI.Format.R32G32B32A32_Float, 0, 0), // 4*4 = 16
-                    new InputElement("COLOR", 0, SlimDX.DXGI.Format.R32G32B32A32_Float, 16, 0) // 4*4 -> 36
-            });
-*/
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct PointVertex
-        {
-            public Vector3 pos;
-            public Vector2 size;
-            public Vector2 texC;
-
-            public static int SizeOf
-            {
-                get { return Marshal.SizeOf(typeof(PointVertex)); }
-            }
         }
 
         private void CreateTextures()
         {
+            // RGB image texture goes here
             var descTex = new Texture2DDescription
                               {
                                   BindFlags = BindFlags.ShaderResource,
@@ -129,53 +120,62 @@ namespace SceneViewerWPF
 
             _imageTexture = new Texture2D(_dxDevice, descTex);
 
-            _imageTextureView = new ShaderResourceView(_dxDevice, _imageTexture);
+            _imageTextureRV = new ShaderResourceView(_dxDevice, _imageTexture);
+
+
+            // depth map buffer
+            _depthMapBuffer = new Buffer(_dxDevice, _vertexCount * sizeof(UInt16), ResourceUsage.Dynamic,
+                BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
+
+            _depthMapBufferRV = new ShaderResourceView(_dxDevice, _depthMapBuffer,
+                new ShaderResourceViewDescription
+                {
+                    Dimension = ShaderResourceViewDimension.Buffer,
+                    Format = Format.R16_UInt,
+                    ElementOffset = 0,
+                    ElementWidth = _vertexCount,
+                });
+
         }
 
         private void CreateVertexBuffer()
         {
             _vertexCount = _xRes * _yRes;
 
-
-            _depthMapBuffer = new Buffer(_dxDevice, _vertexCount*sizeof (UInt16), ResourceUsage.Dynamic, 
-                BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
-
-            _depthMapBufferRV = new ShaderResourceView(_dxDevice, _depthMapBuffer,
-                new ShaderResourceViewDescription
+            using (var vertexStream = new DataStream(_vertexCount * PointVertex.SizeOf, true, true))
+            {
+                // store pixel coordinates in each vertex
+                for (short y = 0; y < _yRes; y++)
+                {
+                    for (short x = 0; x < _xRes; x++)
                     {
-                        Dimension = ShaderResourceViewDimension.Buffer,
-                        Format = Format.R16_UNorm,
-                        ElementOffset = 0,
-                        ElementWidth = _vertexCount,
-                    });
+                        var pt = new PointVertex(x, y);
+                        vertexStream.Write(pt);
+                    }
+                }
+                vertexStream.Position = 0;
 
-            _vertices = new PointVertex[_vertexCount];
-
-            _vertexBuffer = new Buffer(_dxDevice,
-                _vertexCount * PointVertex.SizeOf, ResourceUsage.Dynamic, BindFlags.VertexBuffer, 
-                CpuAccessFlags.Write, ResourceOptionFlags.None);
-            
-            DataStream vertexStream = _vertexBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
-            vertexStream.WriteRange(_vertices);
-            _vertexBuffer.Unmap();
+                // create vertex buffer
+                _vertexBuffer = new Buffer(_dxDevice, vertexStream,
+                                           _vertexCount*PointVertex.SizeOf, ResourceUsage.Immutable,
+                                           BindFlags.VertexBuffer,
+                                           CpuAccessFlags.None, ResourceOptionFlags.None);
+            }
         }
 
         public void Update(KinectData data)
         {
-            var zeroPlanePixelSize = (float)data.ZeroPlanePixelSize * 2f;
-            var f = (float)data.ZeroPlaneDistance;
-
-            const float scale = 0.1f; // Scale from mm to cm!
+            // store variables
+            _zeroPlanePixelSize = (float)data.ZeroPlanePixelSize * 2f;
+            _zeroPlaneDistance = (float)data.ZeroPlaneDistance;
+            _vertexScale = 0.1f; // Scale from mm to cm!
 
             var imageRect = _imageTexture.Map(0, MapMode.WriteDiscard, MapFlags.None);
-            DataStream vertexStream = _vertexBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
-            DataStream depthStream = _depthMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
-
             var imageMap = data.ImageMap;
-            var depthMap = data.DepthMap;
-            int imagePtr = 0;
-            int depthPtr = 0;
-            int vertexPtr = 0;
+            var imagePtr = 0;
+            
+            // update texture
+            // need to convert from RGB24 to RGBA32
             for (int v = 0; v < _yRes; v++)
             {
                 for (int u = 0; u < _xRes; u++)
@@ -186,83 +186,14 @@ namespace SceneViewerWPF
                     byte a = 255;
 
                     int argb = (a << 24) + (b << 16) + (g << 8) + r;
-                    
                     imageRect.Data.Write(argb);
-/*
-                    imageRect.Data.WriteByte(data.ImageMap[imagePtr++]); // R
-                    imageRect.Data.WriteByte(data.ImageMap[imagePtr++]); // G
-                    imageRect.Data.WriteByte(data.ImageMap[imagePtr++]); // B
-                    imageRect.Data.WriteByte(255); // A
-*/
-/*
-                    imageRect.Data.Write(data.ImageMap[imagePtr++] / 255f); // R
-                    imageRect.Data.Write(data.ImageMap[imagePtr++] / 255f); // G
-                    imageRect.Data.Write(data.ImageMap[imagePtr++] / 255f); // B
-                    imageRect.Data.Write(1f); // A
-*/
-                    var depth = depthMap[depthPtr++];
-
-                    depthStream.Write(depth);
-
-                    float pixelSize = 0f;
-                    var pos = new Vector3();
-                    var color = new Vector4();
-                    if (depth != 0)
-                    {
-                        pixelSize = depth*zeroPlanePixelSize*scale/f;
-                        var pX = (u - _xRes/2f) * pixelSize;
-                        var pY = (_yRes/2f - v) * pixelSize;
-                        var pZ = depth * scale; // scale depth from mm to cm!
-
-                        pos = new Vector3(pX, pY, pZ);
-/*
-                        _vertices[vertexPtr++] = new Vector4(pX, pY, pZ, 
-                            pixelSize * 1.2f); // add small overlap
-*/
-
-/*
-                        var r = data.ImageMap[imagePtr++]/255f; // R
-                        var g = data.ImageMap[imagePtr++]/255f; // G
-                        var b = data.ImageMap[imagePtr++]/255f; // B
-                        color = new Vector4(r, g, b, 1f);
-*/
-                        //_vertices[vertexPtr++] = new Vector4(r, g, b, 1f);
-                    }
-                    else
-                    {
-                        //imagePtr += 3;
-                        //point.Position = new Vector4(0, 0, 0, 0);
-                        //point.Color = new Vector4(0, 0, 0, 0);
-                        //_vertices[vertexPtr++] = new Vector4(0, 0, 0, 0);
-                        //_vertices[vertexPtr++] = new Vector4(0, 0, 0, 0);
-                    }
-
-                    vertexStream.Write(pos);
-                    vertexStream.Write(new Vector2(pixelSize * 1.2f));
-                    vertexStream.Write(new Vector2((float)u / _xRes, (float)v / _yRes));
-
-/*
-                    _vertices[vertexPtr++] = new PointVertex
-                                                 {
-                                                     pos = pos,
-                                                     size = new Vector2(pixelSize *1.2f),
-                                                     texC = new Vector2((float)u/_xRes, (float)v/_yRes),
-                                                 };
-*/
                 }
             }
-
             _imageTexture.Unmap(0);
 
-            //vertexStream.WriteRange(_vertices);
-/*
-            for (int i = 0; i < _vertices.Length; i++)
-            {
-                vertexStream.Write(_vertices[i].Position);
-                vertexStream.Write(_vertices[i].Color);
-            }
-*/
-            _vertexBuffer.Unmap();
+            // update depth map
+            DataStream depthStream = _depthMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
+            depthStream.WriteRange(data.DepthMap);
             _depthMapBuffer.Unmap();
         }
 
@@ -271,29 +202,24 @@ namespace SceneViewerWPF
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
-            _light.SetEffectVariable(_lightVariable);
-            _imageMapVariable.SetResource(_imageTextureView);
-            _eyePosWVariable.Set(camera.Eye);
-            _viewProjVariable.SetMatrix(camera.View*camera.Projection);
+            _eyePosWVar.Set(camera.Eye);
+            _viewProjVar.SetMatrix(camera.View*camera.Projection);
 
-            //_fillColorVariable.Set(new Vector4(1.0f, 0.2f, 0.2f, 1.0f));
-
-/*            using (DataStream lightStream = _perFrameBuffer.Map(MapMode.WriteDiscard, MapFlags.None))
-            {
-                lightStream.Write(light);
-                lightStream.Position = 0; // rewind
-            }
-
-            _perFrameVariable.SetConstantBuffer(_perFrameBuffer);*/
+            _zeroPlaneDistanceVar.Set(_zeroPlaneDistance);
+            _zeroPlanePixelSizeVar.Set(_zeroPlanePixelSize);
+            _scaleVar.Set(_vertexScale);
+            _resVar.Set(new Vector2(_xRes, _yRes));
+            _depthMapVar.SetResource(_depthMapBufferRV);
+            _imageMapVar.SetResource(_imageTextureRV);
 
             _dxDevice.InputAssembler.SetInputLayout(_inputLayout);
             _dxDevice.InputAssembler.SetPrimitiveTopology(PrimitiveTopology.PointList);
             _dxDevice.InputAssembler.SetVertexBuffers(0, 
                 new VertexBufferBinding(_vertexBuffer, PointVertex.SizeOf, 0));
 
-            for (int p = 0; p < _technique.Description.PassCount; p++)
+            for (int p = 0; p < _renderTech.Description.PassCount; p++)
             {
-                _technique.GetPassByIndex(p).Apply();
+                _renderTech.GetPassByIndex(p).Apply();
                 _dxDevice.Draw(_vertexCount, 0);
             }
         }
@@ -311,30 +237,34 @@ namespace SceneViewerWPF
 
         protected void Dispose(bool disposing)
         {
+            if (_depthMapBuffer != null)
+            {
+                _depthMapBuffer.Dispose();
+                _depthMapBuffer = null;
+            }
+
+            if (_depthMapBufferRV != null)
+            {
+                _depthMapBufferRV.Dispose();
+                _depthMapBufferRV = null;
+            }
+
             if (_imageTexture != null)
             {
                 _imageTexture.Dispose();
                 _imageTexture = null;
             }
 
-            if (_imageTextureView != null)
+            if (_imageTextureRV != null)
             {
-                _imageTextureView.Dispose();
-                _imageTextureView = null;
+                _imageTextureRV.Dispose();
+                _imageTextureRV = null;
             }
 
             if (_effect != null)
             {
                 _effect.Dispose();
                 _effect = null;
-                
-                _technique = null;
-                _effectPass = null;
-
-                _eyePosWVariable = null;
-                _viewProjVariable = null;
-                _lightVariable = null;
-                _imageMapVariable = null;
             }
 
             if (_inputLayout != null)

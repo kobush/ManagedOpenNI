@@ -229,6 +229,35 @@ namespace SceneViewerWPF
             ClientWidth = width;
             ClientHeight = height;
 
+            BeginScene();
+            Camera.Update(ClientWidth, ClientHeight);
+
+            _kinectPoints.Render(Camera);
+
+/*
+            _fire.Update(dt, gameTime);
+            _fire.Render(Camera);
+*/
+
+/*
+            _dxCube.Prepare();
+            var xRes = 30;
+            var yRes = 30;
+
+*/
+
+
+/*
+            var black = new Color4(1f, 0, 0, 0);
+            var rect = new Rectangle(5, 5 + arg % 100, 0, 0);
+            _dxFont.Draw(null, "Hello from Direct3D", rect, FontDrawFlags.NoClip, black);
+*/
+
+            EndScene();
+        }
+
+        private void BeginScene()
+        {
             // make sure buffers are initialized with current size
             EnsureOutputBuffers();
 
@@ -243,44 +272,10 @@ namespace SceneViewerWPF
 
             // set viewport
             _dxDevice.Rasterizer.SetViewports(new Viewport(0, 0, ClientWidth, ClientHeight, 0.0f, 1.0f));
+        }
 
-            Camera.Update(ClientWidth, ClientHeight);
-/*
-            _dxEffect.Prepare(Camera.View, Camera.Projection);
-            _dxEffect.Render(world);
-*/
-
-            _kinectPoints.Render(Camera);
-
-            _fire.Update(dt, gameTime);
-            _fire.Render(Camera);
-/*
-            _dxCube.Prepare();
-            var xRes = 30;
-            var yRes = 30;
-
-            for (int x = 0; x < xRes; x++)
-            {
-                for (int y = 0; y < yRes; y++)
-                {
-                    var post = new Vector3(x - xRes/2, y - yRes/2, 0);
-                    world = Matrix.Scaling(0.5f, 0.5f, 0.5f);
-                    world *= Matrix.Translation(post);
-                    //world *= Matrix.Billboard(post, Camera.Eye, Camera.Up, Camera.At);
-
-                    _dxEffect.Render(world);
-                    _dxCube.Render();
-                }
-            }
-*/
-
-
-/*
-            var black = new Color4(1f, 0, 0, 0);
-            var rect = new Rectangle(5, 5 + arg % 100, 0, 0);
-            _dxFont.Draw(null, "Hello from Direct3D", rect, FontDrawFlags.NoClip, black);
-*/
-
+        private void EndScene()
+        {
             _dxDevice.Flush();
         }
 

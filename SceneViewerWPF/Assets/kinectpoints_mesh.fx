@@ -2,7 +2,10 @@
 // Constant Buffer Variables
 //--------------------------------------------------------------------------------------
 
+#include "lighthelper.fx"
+
 cbuffer cbPerFrame {
+	Light	gLight;
 	float3	gEyePosW;
 	float4	gFillColor;
 	matrix	gViewProj;
@@ -66,10 +69,13 @@ struct GS_OUT
 	float3 normalW : NORMAL;
 	float2 texC : TEXCOORD;
 	float4 diffuse : DIFFUSE;
+	uint primID : SV_PrimitiveID;
 };
 
 [maxvertexcount(4)]
-void GS(point VS_OUT gIn[1], inout TriangleStream<GS_OUT> triStream)
+void GS(point VS_OUT gIn[1],
+	uint primID : SV_PrimitiveID,
+	inout TriangleStream<GS_OUT> triStream)
 {
 	[branch]
 	if (gIn[0].centerW.z == 0) // skip not visible points
@@ -126,6 +132,7 @@ void GS(point VS_OUT gIn[1], inout TriangleStream<GS_OUT> triStream)
 		gOut.normalW = look;
 		gOut.texC = gIn[0].texC; //texC[i];
 		gOut.diffuse = float4(c, c, 0.0f, 1.0);
+		gOut.primID = primID;
 		triStream.Append(gOut);
 	}
 }
@@ -136,19 +143,59 @@ void GS(point VS_OUT gIn[1], inout TriangleStream<GS_OUT> triStream)
 
 SamplerState gTriLinearSam
 {
-	Filter = MIN_MAG_MIP_LINEAR;
+	Filter = MIN_MAG_MIP_POINT;
 	AddressU = Border;
 	AddressV = Border;
 };
 
 float4 PS( GS_OUT pIn) : SV_Target
 {
+	//float4 diffuse = pIn.diffuse;
 	float2 uv = pIn.texC;
 	float4 diffuse = gImageMap.Sample( gTriLinearSam, uv );
 
-	// no lighting so just return input color
-	return diffuse;
+	// get color from texture
+	if (gFillColor.w > 0.5)
+		diffuse = gFillColor;
+	
+	[branch]
+	if (gLight.type == 0)
+	{
+		// no lighting so just return input color
+		return diffuse;
+	}
+	else 
+	{
+		// use lighting method
+
+		float4 spec = float4(0, 0, 0, 0);
+
+		float3 litColor;
+
+		// Interpolating normal can make it not be of unit length so
+		// normalize it.
+		pIn.normalW = normalize(pIn.normalW);
+
+		// set surface info struct
+		SurfaceInfo v = {pIn.posW, pIn.normalW, diffuse, spec};
+
+		if( gLight.type == 1 ) // Parallel
+		{
+			litColor = ParallelLight(v, gLight, gEyePosW);
+		}
+		else if( gLight.type == 2 ) // Point
+		{
+			litColor = PointLight(v, gLight, gEyePosW);
+		}
+		else if( gLight.type == 3 ) // Spot
+		{
+			litColor = Spotlight(v, gLight, gEyePosW);
+		}
+
+		return float4(litColor, diffuse.a);
+	}
 }
+
 
 //--------------------------------------------------------------------------------------
 
