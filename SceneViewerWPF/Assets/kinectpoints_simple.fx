@@ -136,17 +136,19 @@ void GS(point VS_OUT gIn[1], inout TriangleStream<GS_OUT> triStream)
 
 SamplerState gTriLinearSam
 {
-	Filter = MIN_MAG_MIP_LINEAR;
+	Filter = MIN_MAG_MIP_POINT;
 	AddressU = Border;
 	AddressV = Border;
 };
 
 float4 PS( GS_OUT pIn) : SV_Target
 {
-	float2 uv = pIn.texC;
-	float4 diffuse = gImageMap.Sample( gTriLinearSam, uv );
+	// sample texture
+	float4 sample = gImageMap.Sample( gTriLinearSam, pIn.texC );
 
-	// no lighting so just return input color
+	// mix with fill color based on alpha
+	float4 diffuse = float4(lerp(sample.xyz, gFillColor.xyz, gFillColor.w), 1.0f);
+
 	return diffuse;
 }
 

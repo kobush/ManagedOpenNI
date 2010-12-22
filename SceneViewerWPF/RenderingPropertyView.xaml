@@ -1,0 +1,51 @@
+﻿<UserControl
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:local="clr-namespace:SceneViewerWPF" xmlns:toolkit="clr-namespace:Microsoft.Windows.Controls;assembly=WPFToolkit.Extended" mc:Ignorable="d"
+	x:Class="SceneViewerWPF.RenderingPropertyView"
+	x:Name="UserControl"
+	d:DesignWidth="209" d:DesignHeight="205" UseLayoutRounding="True">
+
+	<Grid x:Name="LayoutRoot">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" MinHeight="21"/>
+            <RowDefinition/>
+		</Grid.RowDefinitions>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="Auto" MinWidth="50" />
+			<ColumnDefinition Width="*" />
+		</Grid.ColumnDefinitions>
+		<Label Content="Technique:" VerticalAlignment="Center" />
+		<ComboBox x:Name="renderTech" Grid.Column="1" Grid.Row="0" Padding="4,2,4,3" Margin="0,3" 
+                  SelectionChanged="renderTech_SelectionChanged">
+            <ComboBoxItem IsSelected="True" Tag="{x:Static local:KinectPointsRendererType.Billboard}">Billboards</ComboBoxItem>
+            <ComboBoxItem Tag="{x:Static local:KinectPointsRendererType.Mesh}">Mesh</ComboBoxItem>
+		</ComboBox>
+		
+		<CheckBox Content="Wireframe" Grid.Row="1" Grid.Column="1" x:Name="wireFrame"></CheckBox>
+		
+		<Label Content="Scale:" Grid.Row="2" VerticalAlignment="Center"  />
+		<TextBox x:Name="scale" Margin="0,3" Grid.Row="2" Grid.Column="1" TextChanged="Scale_OnTextChanged" d:LayoutOverrides="GridBox"/>
+
+		<Label Content="Mesh threshold:" Grid.Row="3" VerticalAlignment="Center"  />
+		<TextBox x:Name="meshThreshold" Margin="0,3" Grid.Row="3" Grid.Column="1" d:LayoutOverrides="GridBox" />
+
+
+        <Label Content="Fill color:" Grid.Row="4" VerticalAlignment="Center" />
+        <toolkit:ColorPicker x:Name="fillColor" Grid.Column="1" Grid.Row="4" Margin="0,3" SelectedColor="LightGray" 
+                             SelectedColorChanged="FillColor_OnSelectedColorChanged"/>
+        
+		<Label Content="Texture alpha:" Grid.Row="5" d:LayoutOverrides="Height" />
+		<Slider x:Name="texAlpha" Grid.Column="1" Grid.Row="5" Maximum="1" TickFrequency="0.1" Value="1" Margin="0,0,26,0"
+                ValueChanged="TexAlpha_OnValueChanged"/>
+		<TextBlock  HorizontalAlignment="Right" Grid.Column="1" Grid.Row="5" Text="{Binding Value, ElementName=texAlpha, StringFormat=F1}" VerticalAlignment="Center" Padding="0,0,4,0" />
+
+    </Grid>
+</UserControl>

@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit;
 using NiSimpleViewerWPF;
+using SlimDX;
 using SlimDX.Windows;
 
 namespace SceneViewerWPF
@@ -28,10 +29,16 @@ namespace SceneViewerWPF
 
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
+
+            cameraProps.SelectedCameraModeChanged += OnSelectedCameraModeChanged;
+            renderProps.SelectedRenderTechChanged += OnSelectedRenderTechChanged;
+            renderProps.RenderPropertyChanged += OnRendererPropertyChanged;
         }
 
         void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            busyIndicator.IsBusy = true;
+
             _dxImageContainer = new D3DImageSlimDX();
             _dxImageContainer.IsFrontBufferAvailableChanged += _D3DImageContainer_IsFrontBufferAvailableChanged;
 
@@ -40,9 +47,13 @@ namespace SceneViewerWPF
             _dxScene = new DxScene();
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
 
+            renderProps.Scale = _dxScene.PointsCloudRenderer.Scale;
+
+            // init camera
             helixView.Camera.Position = new Point3D(0,25,-100);
             helixView.Camera.LookDirection = new Point3D(0, 0, 100) - helixView.Camera.Position;
             helixView.Camera.UpDirection = new Vector3D(0,1,0);
+            helixView.Camera.FarPlaneDistance = 2000; // this is about 20 meters
             helixView.CameraChanged += delegate { UpdateCameraDisplay(); };
             UpdateCameraDisplay();
 
@@ -58,19 +69,25 @@ namespace SceneViewerWPF
 
         void OnKinectTrackinkgStarted(object sender, EventArgs e)
         {
+            busyIndicator.IsBusy = false;
+
             if (_dxScene == null) return;
-            _dxScene.PointsCloudRenderer.Init(((KinectTracker)sender).CurrentData);
+            _dxScene.PointsCloudRenderer.Init(((KinectTracker)sender).CurrentFrame);
         }
 
         private void OnKinectTrackingUpdated(object sender, EventArgs e)
         {
             if (_dxScene == null) return;
-            _dxScene.PointsCloudRenderer.Update(((KinectTracker)sender).CurrentData);
+
+            if (freezeUpdates.IsChecked != true)
+            {
+                _dxScene.PointsCloudRenderer.Update(((KinectTracker) sender).CurrentFrame);
+            }
         }
 
         private void OnKinectTrackingCompleted(object sender, EventArgs e)
         {
-            
+            busyIndicator.IsBusy = false;
         }
 
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
@@ -130,6 +147,8 @@ namespace SceneViewerWPF
             var re = (RenderingEventArgs)e;
             var time = re.RenderingTime;
 
+            _dxScene.Wireframe = renderProps.Wireframe;
+
             SlimDX.Direct3D10.Texture2D lastTexture = _dxScene.SharedTexture;
 
             _dxScene.Render((float) time.TotalSeconds, 
@@ -151,9 +170,7 @@ namespace SceneViewerWPF
         {
             var camera = (PerspectiveCamera) helixView.Camera;
 
-            cameraDir.Text = camera.LookDirection.Format("f1");
-            cameraEye.Text = camera.Position.Format("f1");
-            cameraUp.Text = camera.UpDirection.Format("f1");
+            cameraProps.UpdateCamera(camera);
 
             if (_dxScene != null)
             {
@@ -162,15 +179,26 @@ namespace SceneViewerWPF
             }
         }
 
-        private void D3DImage_SizeChanged(object sender, SizeChangedEventArgs e)
+        private void OnSelectedCameraModeChanged(object sender, EventArgs e)
         {
-
+            helixView.CameraMode = cameraProps.SelectedCameraMode;
         }
 
-        private void OnCameraModeSelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        private void OnSelectedRenderTechChanged(object sender, EventArgs e)
         {
-            var item = (ComboBoxItem)cameraMode.SelectedItem;
-            helixView.CameraMode = (CameraMode) item.Tag;
+            _dxScene.CrateKinectPointsRenderer(renderProps.SelectedRenderTech);
+        }
+
+        private void OnRendererPropertyChanged(object sender, EventArgs e)
+        {
+            if (renderProps.Scale != null)
+                _dxScene.PointsCloudRenderer.Scale = renderProps.Scale.Value;
+
+            _dxScene.PointsCloudRenderer.FillColor =
+                new Vector4(renderProps.FillColor.ScR,
+                            renderProps.FillColor.ScG,
+                            renderProps.FillColor.ScB,
+                            (float) (1.0 - renderProps.TextureAlpha));
         }
     }
 }

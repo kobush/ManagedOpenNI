@@ -20,7 +20,8 @@ namespace SceneViewerWPF
         private Font _dxFont;
         //private DxEffect _dxEffect;
         private DxCube _dxCube;
-        private DxKinectPointsCloudRenderer _kinectPoints;
+        private IKinectPointsCloudRenderer _kinectPoints;
+
         private DxParticleSystemRenderer _fire;
         private DxTextureManager _textureManager;
         private float _lastTime;
@@ -32,6 +33,14 @@ namespace SceneViewerWPF
         
         public Texture2D SharedTexture { get; private set; }
         public Texture2D DepthTexture { get; private set; }
+
+        private bool _wireframe;
+
+        public bool Wireframe
+        {
+            get { return _wireframe; }
+            set { _wireframe = value; }
+        }
 
         public DxScene()
         {
@@ -73,12 +82,37 @@ namespace SceneViewerWPF
 
 //            _dxEffect = new DxEffect(_dxDevice);
             _dxCube = new DxCube(_dxDevice);
-            _kinectPoints = new DxKinectPointsCloudRenderer(_dxDevice);
+            CrateKinectPointsRenderer(KinectPointsRendererType.Billboard);
 
             ShaderResourceView texArray = _textureManager.CreateTexArray("flares", @"Assets\flare0.dds");
             _fire = new DxParticleSystemRenderer(_dxDevice, texArray, 500);
 
             _dxDevice.Flush();
+        }
+
+        public IKinectPointsCloudRenderer PointsCloudRenderer
+        {
+            get { return _kinectPoints; }
+        }
+
+        public void CrateKinectPointsRenderer(KinectPointsRendererType rendererType)
+        {
+            var oldRenderer = _kinectPoints;
+
+            // create new renderer
+            if (rendererType == KinectPointsRendererType.Billboard)
+                _kinectPoints = new DxKinectPointsCloudRenderer(_dxDevice);
+            else if (rendererType == KinectPointsRendererType.Mesh)
+                _kinectPoints = new DxKinectMeshRenderer(_dxDevice);
+
+            // destroy old renderer
+            if (oldRenderer != null)
+            {
+                // copy settings
+                _kinectPoints.Scale = oldRenderer.Scale;
+
+                oldRenderer.Dispose();
+            }
         }
 
         private void EnsureOutputBuffers()
@@ -232,6 +266,7 @@ namespace SceneViewerWPF
             BeginScene();
             Camera.Update(ClientWidth, ClientHeight);
 
+            _kinectPoints.Update(dt, gameTime);
             _kinectPoints.Render(Camera);
 
 /*
@@ -268,7 +303,17 @@ namespace SceneViewerWPF
             _dxDevice.ClearDepthStencilView(_dxDepthStencilView, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
             _dxDevice.ClearRenderTargetView(_dxRenderView, new Color4(0f, 0, 0, 0)); // uses transparent color
 
-            SetRasterizationParameters();
+            // set rasterization parameters
+            var rsd = new RasterizerStateDescription
+            {
+                //IsAntialiasedLineEnabled = true,
+                IsFrontCounterclockwise = false,
+                CullMode = CullMode.None,
+                FillMode = (_wireframe) ? FillMode.Wireframe : FillMode.Solid
+            };
+
+            RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);
+            _dxDevice.Rasterizer.State = rsdState;
 
             // set viewport
             _dxDevice.Rasterizer.SetViewports(new Viewport(0, 0, ClientWidth, ClientHeight, 0.0f, 1.0f));
@@ -278,23 +323,6 @@ namespace SceneViewerWPF
         {
             _dxDevice.Flush();
         }
-
-        public DxKinectPointsCloudRenderer PointsCloudRenderer
-        {
-            get { return _kinectPoints; }
-        }
-
-        private void SetRasterizationParameters()
-        {
-            var rsd = new RasterizerStateDescription
-                          {
-                              //IsAntialiasedLineEnabled = true,
-                              IsFrontCounterclockwise = false,
-                              CullMode = CullMode.None,
-                              FillMode = FillMode.Solid,
-                          };
-            RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);
-            _dxDevice.Rasterizer.State = rsdState;
-        }
     }
+
 }

@@ -33,12 +33,12 @@ namespace SceneViewerWPF
             thisCamera.FOV = (float)DegreeToRadian(wpfCamera.FieldOfView);
         }
 
-        public static double DegreeToRadian(double angle)
+        public static double DegreeToRadian(this double angle)
         {
             return Math.PI*angle/180.0;
         }
 
-        public static double RadianToDegree(double angle)
+        public static double RadianToDegree(this double angle)
         {
             return angle*(180.0/Math.PI);
         }
