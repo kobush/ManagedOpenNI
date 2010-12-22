@@ -12,3 +12,13 @@ For more information about OpenNI go to http://www.openni.org/
 And join these discussion groups:
 http://groups.google.com/group/openni-dev
 http://groups.google.com/group/openkinect
+
+To build the ManagedNiteEx project you might heve to fix the additional include and link directories
+for the C++ compiler. Add paths to c:\Program Files\OpenNI\Include 
+and c:\Program Files\OpenNI\Lib respectively. 
+
+To build the samples you will have to reference these external libraries:
+- WPF Toolkit  http://wpf.codeplex.com/releases/view/40535
+- Helix 3D Toolkit http://helixtoolkit.codeplex.com/
+- SlimDX http://slimdx.org/download.php
+

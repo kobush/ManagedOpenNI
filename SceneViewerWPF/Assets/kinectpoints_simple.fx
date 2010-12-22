@@ -180,6 +180,7 @@ float4 PS( GS_OUT pIn) : SV_Target
 
 
 //--------------------------------------------------------------------------------------
+
 technique10 Render
 {
     pass P0
@@ -187,6 +188,10 @@ technique10 Render
         SetVertexShader( CompileShader( vs_4_0, VS() ) );
         SetGeometryShader( CompileShader( gs_4_0, GS() ) );
         SetPixelShader( CompileShader( ps_4_0, PS() ) );
+
+		// restore states
+		SetBlendState(NULL, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
+		SetDepthStencilState( NULL, 0 );
     }
 }
 

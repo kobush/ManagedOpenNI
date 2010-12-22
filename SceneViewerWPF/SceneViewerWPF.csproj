@@ -78,8 +78,10 @@
     <Compile Include="DxCamera.cs" />
     <Compile Include="DxCube.cs" />
     <Compile Include="DxEffect.cs" />
-    <Compile Include="DxKinectPointsCloud.cs" />
+    <Compile Include="DxKinectPointsCloudRenderer.cs" />
+    <Compile Include="DxParticleSystemRenderer.cs" />
     <Compile Include="DxScene.cs" />
+    <Compile Include="DxTextureManager.cs" />
     <Compile Include="KinectTracker.cs" />
     <Compile Include="DxLight.cs" />
     <Compile Include="MainWindow.xaml.cs">
@@ -113,6 +115,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\lighthelper.fx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\fire.fx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\flare0.dds">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="Properties\Settings.settings">

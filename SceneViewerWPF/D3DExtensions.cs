@@ -17,6 +17,11 @@ namespace SceneViewerWPF
             return new Vector3((float) thisPoint.X, (float) thisPoint.Y, (float) thisPoint.Z);
         }
 
+        public static float RandF(this Random random, float min, float max)
+        {
+            return min + (float)random.NextDouble() * Math.Abs(max - min);
+        }
+
         public static void SetFromWpfCamera(this DxCamera thisCamera, System.Windows.Media.Media3D.PerspectiveCamera wpfCamera)
         {
             thisCamera.At = (wpfCamera.Position + wpfCamera.LookDirection).ToVector3();

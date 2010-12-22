@@ -20,7 +20,10 @@ namespace SceneViewerWPF
         private Font _dxFont;
         //private DxEffect _dxEffect;
         private DxCube _dxCube;
-        private DxKinectPointsCloud _dxKinectPoints;
+        private DxKinectPointsCloudRenderer _kinectPoints;
+        private DxParticleSystemRenderer _fire;
+        private DxTextureManager _textureManager;
+        private float _lastTime;
 
         public int ClientHeight { get; set; }
         public int ClientWidth { get; set; }
@@ -66,9 +69,14 @@ namespace SceneViewerWPF
 
             _dxFont = new Font(_dxDevice, fontDesc);
 
+            _textureManager = new DxTextureManager(_dxDevice);
+
 //            _dxEffect = new DxEffect(_dxDevice);
             _dxCube = new DxCube(_dxDevice);
-            _dxKinectPoints = new DxKinectPointsCloud(_dxDevice);
+            _kinectPoints = new DxKinectPointsCloudRenderer(_dxDevice);
+
+            ShaderResourceView texArray = _textureManager.CreateTexArray("flares", @"Assets\flare0.dds");
+            _fire = new DxParticleSystemRenderer(_dxDevice, texArray, 500);
 
             _dxDevice.Flush();
         }
@@ -170,9 +178,10 @@ namespace SceneViewerWPF
 
         private void DestroyD3D()
         {
+            _textureManager.Dispose();
             _dxCube.Dispose();
             //_dxEffect.Dispose();
-            _dxKinectPoints.Dispose();
+            _kinectPoints.Dispose();
 
 
             if (_dxFont != null)
@@ -212,8 +221,11 @@ namespace SceneViewerWPF
             }
         }
 
-        public void Render(int arg, int width, int height)
+        public void Render(float gameTime, int width, int height)
         {
+            var dt = gameTime - _lastTime;
+            _lastTime = gameTime;
+
             ClientWidth = width;
             ClientHeight = height;
 
@@ -232,15 +244,16 @@ namespace SceneViewerWPF
             // set viewport
             _dxDevice.Rasterizer.SetViewports(new Viewport(0, 0, ClientWidth, ClientHeight, 0.0f, 1.0f));
 
-            var world = Matrix.Identity;
-            
             Camera.Update(ClientWidth, ClientHeight);
 /*
             _dxEffect.Prepare(Camera.View, Camera.Projection);
             _dxEffect.Render(world);
 */
 
-            _dxKinectPoints.Render(Camera);
+            _kinectPoints.Render(Camera);
+
+            _fire.Update(dt, gameTime);
+            _fire.Render(Camera);
 /*
             _dxCube.Prepare();
             var xRes = 30;
@@ -271,9 +284,9 @@ namespace SceneViewerWPF
             _dxDevice.Flush();
         }
 
-        public DxKinectPointsCloud PointsCloud
+        public DxKinectPointsCloudRenderer PointsCloudRenderer
         {
-            get { return _dxKinectPoints; }
+            get { return _kinectPoints; }
         }
 
         private void SetRasterizationParameters()

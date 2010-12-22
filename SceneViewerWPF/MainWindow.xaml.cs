@@ -59,13 +59,13 @@ namespace SceneViewerWPF
         void OnKinectTrackinkgStarted(object sender, EventArgs e)
         {
             if (_dxScene == null) return;
-            _dxScene.PointsCloud.Init(((KinectTracker)sender).CurrentData);
+            _dxScene.PointsCloudRenderer.Init(((KinectTracker)sender).CurrentData);
         }
 
         private void OnKinectTrackingUpdated(object sender, EventArgs e)
         {
             if (_dxScene == null) return;
-            _dxScene.PointsCloud.Update(((KinectTracker)sender).CurrentData);
+            _dxScene.PointsCloudRenderer.Update(((KinectTracker)sender).CurrentData);
         }
 
         private void OnKinectTrackingCompleted(object sender, EventArgs e)
@@ -132,7 +132,8 @@ namespace SceneViewerWPF
 
             SlimDX.Direct3D10.Texture2D lastTexture = _dxScene.SharedTexture;
 
-            _dxScene.Render(time.Milliseconds, (int)helixView.ActualWidth, (int)helixView.ActualHeight);
+            _dxScene.Render((float) time.TotalSeconds, 
+                (int)helixView.ActualWidth, (int)helixView.ActualHeight);
 
             // output buffer could change because of size change
             if (lastTexture != _dxScene.SharedTexture)

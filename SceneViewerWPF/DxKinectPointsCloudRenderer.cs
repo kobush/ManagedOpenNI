@@ -10,7 +10,7 @@ using MapFlags = SlimDX.Direct3D10.MapFlags;
 
 namespace SceneViewerWPF
 {
-    public class DxKinectPointsCloud : IDisposable
+    public class DxKinectPointsCloudRenderer : IDisposable
     {
         private readonly Device _dxDevice;
         private int _xRes;
@@ -31,9 +31,11 @@ namespace SceneViewerWPF
 
         private Texture2D _imageTexture;
         private ShaderResourceView _imageTextureView;
-        private EffectResourceVariable _imageMapResource;
+        private EffectResourceVariable _imageMapVariable;
+        private Buffer _depthMapBuffer;
+        private ShaderResourceView _depthMapBufferRV;
 
-        public DxKinectPointsCloud(Device dxDevice)
+        public DxKinectPointsCloudRenderer(Device dxDevice)
         {
             _dxDevice = dxDevice;
 
@@ -77,7 +79,7 @@ namespace SceneViewerWPF
             _fillColorVariable = _effect.GetVariableByName("gFillColor").AsVector();
             _lightVariable = _effect.GetVariableByName("gLight");
 
-            _imageMapResource = _effect.GetVariableByName("gImageMap").AsResource();
+            _imageMapVariable = _effect.GetVariableByName("gImageMap").AsResource();
 
             ShaderSignature signature = _effectPass.Description.Signature;
             _inputLayout = new InputLayout(_dxDevice, signature, 
@@ -132,7 +134,20 @@ namespace SceneViewerWPF
 
         private void CreateVertexBuffer()
         {
-            _vertexCount = _xRes*_yRes;
+            _vertexCount = _xRes * _yRes;
+
+
+            _depthMapBuffer = new Buffer(_dxDevice, _vertexCount*sizeof (UInt16), ResourceUsage.Dynamic, 
+                BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
+
+            _depthMapBufferRV = new ShaderResourceView(_dxDevice, _depthMapBuffer,
+                new ShaderResourceViewDescription
+                    {
+                        Dimension = ShaderResourceViewDimension.Buffer,
+                        Format = Format.R16_UNorm,
+                        ElementOffset = 0,
+                        ElementWidth = _vertexCount,
+                    });
 
             _vertices = new PointVertex[_vertexCount];
 
@@ -154,6 +169,7 @@ namespace SceneViewerWPF
 
             var imageRect = _imageTexture.Map(0, MapMode.WriteDiscard, MapFlags.None);
             DataStream vertexStream = _vertexBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
+            DataStream depthStream = _depthMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
 
             var imageMap = data.ImageMap;
             var depthMap = data.DepthMap;
@@ -184,9 +200,9 @@ namespace SceneViewerWPF
                     imageRect.Data.Write(data.ImageMap[imagePtr++] / 255f); // B
                     imageRect.Data.Write(1f); // A
 */
-
-
                     var depth = depthMap[depthPtr++];
+
+                    depthStream.Write(depth);
 
                     float pixelSize = 0f;
                     var pos = new Vector3();
@@ -247,6 +263,7 @@ namespace SceneViewerWPF
             }
 */
             _vertexBuffer.Unmap();
+            _depthMapBuffer.Unmap();
         }
 
         public void Render(DxCamera camera)
@@ -255,11 +272,10 @@ namespace SceneViewerWPF
                 return;
 
             _light.SetEffectVariable(_lightVariable);
-
-            _imageMapResource.SetResource(_imageTextureView);
-
+            _imageMapVariable.SetResource(_imageTextureView);
             _eyePosWVariable.Set(camera.Eye);
             _viewProjVariable.SetMatrix(camera.View*camera.Projection);
+
             //_fillColorVariable.Set(new Vector4(1.0f, 0.2f, 0.2f, 1.0f));
 
 /*            using (DataStream lightStream = _perFrameBuffer.Map(MapMode.WriteDiscard, MapFlags.None))
@@ -270,22 +286,55 @@ namespace SceneViewerWPF
 
             _perFrameVariable.SetConstantBuffer(_perFrameBuffer);*/
 
-            _effectPass.Apply();
-
             _dxDevice.InputAssembler.SetInputLayout(_inputLayout);
             _dxDevice.InputAssembler.SetPrimitiveTopology(PrimitiveTopology.PointList);
             _dxDevice.InputAssembler.SetVertexBuffers(0, 
                 new VertexBufferBinding(_vertexBuffer, PointVertex.SizeOf, 0));
 
-            _dxDevice.Draw(_vertexCount, 0);
+            for (int p = 0; p < _technique.Description.PassCount; p++)
+            {
+                _technique.GetPassByIndex(p).Apply();
+                _dxDevice.Draw(_vertexCount, 0);
+            }
         }
 
         public void Dispose()
         {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~DxKinectPointsCloudRenderer()
+        {
+            Dispose(false);
+        }
+
+        protected void Dispose(bool disposing)
+        {
+            if (_imageTexture != null)
+            {
+                _imageTexture.Dispose();
+                _imageTexture = null;
+            }
+
+            if (_imageTextureView != null)
+            {
+                _imageTextureView.Dispose();
+                _imageTextureView = null;
+            }
+
             if (_effect != null)
             {
                 _effect.Dispose();
                 _effect = null;
+                
+                _technique = null;
+                _effectPass = null;
+
+                _eyePosWVariable = null;
+                _viewProjVariable = null;
+                _lightVariable = null;
+                _imageMapVariable = null;
             }
 
             if (_inputLayout != null)
