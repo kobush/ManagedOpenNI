@@ -39,9 +39,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="HelixToolkit">
-      <HintPath>..\..\..\_CodePlex\HelixToolkit\trunk\Source\HelixToolkit\bin\Debug\HelixToolkit.dll</HintPath>
+      <HintPath>..\External\HelixToolkit.dll</HintPath>
     </Reference>
-    <Reference Include="SlimDX, Version=4.0.10.43, Culture=neutral, PublicKeyToken=b1b0c32fd1ffe4f9, processorArchitecture=x86" />
+    <Reference Include="SlimDX">
+      <HintPath>..\External\SlimDX.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
