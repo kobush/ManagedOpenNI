@@ -4,7 +4,6 @@ using SlimDX;
 using SlimDX.D3DCompiler;
 using SlimDX.Direct3D10;
 using SlimDX.DXGI;
-
 using Buffer = SlimDX.Direct3D10.Buffer;
 using Device = SlimDX.Direct3D10.Device;
 using MapFlags = SlimDX.Direct3D10.MapFlags;
@@ -41,12 +40,14 @@ namespace SceneViewerWPF
         private bool _initialized;
         private int _xRes;
         private int _yRes;
+        
         private int _vertexCount;
         private Buffer _vertexBuffer;
 
         private Effect _effect;
         private EffectTechnique _renderTech;
         private InputLayout _inputLayout;
+        
         private EffectVectorVariable _eyePosWVar;
         private EffectMatrixVariable _viewProjVar;
         private EffectMatrixVariable _worldVar;
@@ -73,10 +74,9 @@ namespace SceneViewerWPF
 
         private Matrix _depthToRgb;
         private EffectMatrixVariable _depthToRgbVar;
-        
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct PointVertex
+        private struct PointVertex
         {
             public short X;
             public short Y;
@@ -134,8 +134,8 @@ namespace SceneViewerWPF
 
             ShaderSignature signature = _renderTech.GetPassByIndex(0).Description.Signature;
             _inputLayout = new InputLayout(_dxDevice, signature,
-                                           new[] { new InputElement("POSITION", 0, SlimDX.DXGI.Format.R16G16_SInt, 0, 0)
-                                                 });
+                    new[] { new InputElement("POSITION", 0, SlimDX.DXGI.Format.R16G16_SInt, 0, 0)
+                });
         }
 
         public void Init(KinectFrame frame, KinectCameraInfo cameraInfo)
@@ -176,7 +176,6 @@ namespace SceneViewerWPF
 
             _imageTextureRV = new ShaderResourceView(_dxDevice, _imageTexture);
 
-
             // depth map buffer
             _depthMapBuffer = new Buffer(_dxDevice, _vertexCount * sizeof(UInt16), ResourceUsage.Dynamic,
                 BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
@@ -189,7 +188,6 @@ namespace SceneViewerWPF
                     ElementOffset = 0,
                     ElementWidth = _vertexCount,
                 });
-
         }
 
         private void CreateVertexBuffer()
@@ -222,7 +220,6 @@ namespace SceneViewerWPF
             if (!_initialized)
                 Init(frame, cameraInfo);
 
- 
             var imageRect = _imageTexture.Map(0, MapMode.WriteDiscard, MapFlags.None);
             var imageMap = frame.ImageMap;
             var imagePtr = 0;
@@ -340,133 +337,5 @@ namespace SceneViewerWPF
                 _vertexBuffer = null;
             }
         }
-    }
-
-    class KinectCalibration
-    {
-        public class CameraInfo 
-        {
-            public Vector2 ImageRes;
-            public Matrix CameraMatrix;
-            public float[] DistortionCoefficients;
-            public Matrix RectificationMatrix;
-            public Matrix ProjectionMatrix;
-
-        }
-
-        public class PinholeCameraModel
-        {
-            public static PinholeCameraModel FromCameraInfo(CameraInfo cameraInfo)
-            {
-                return new PinholeCameraModel
-                           {
-                               cx = cameraInfo.CameraMatrix.M13,
-                               cy = cameraInfo.CameraMatrix.M23,
-                               fx = cameraInfo.CameraMatrix.M11,
-                               fy = cameraInfo.CameraMatrix.M22,
-                           };
-            }
-
-            //Returns the x coordinate of the optical center.
-            public float cx { get; set;  }
-
-            // Returns the y coordinate of the optical center. 
-            public float cy { get; set;  }
-
-            // Returns the focal length (pixels) in x direction of the rectified image. 
-            public float fx { get; set;  }
-
-            //Returns the focal length (pixels) in y direction of the rectified image. 
-            public float fy { get; set; }
-
-        }
-
-        private readonly CameraInfo KinectDepthInfo = new CameraInfo
-                                             {
-                                                 ImageRes = new Vector2(640, 480),
-                                                 CameraMatrix = new Matrix
-                                                                    {
-                                                                        M11 = 575f,// 585.05f, // focal length
-                                                                        M12 = 0f,
-                                                                        M13 = 320f, //315.838f, // 320 half x-res
-                                                                        M21 = 0f,
-                                                                        M22 = 575f, //585.051f, // focal length
-                                                                        M23 = 240f, //242.94f, // 240 half y-res
-                                                                        M33 = 1f
-                                                                    },
-                                             };
-
-        private readonly CameraInfo KinectRgbInfo = new CameraInfo
-                                             {
-                                                 ImageRes = new Vector2(640, 480),
-                                                 CameraMatrix = new Matrix
-                                                                    {
-                                                                        M11 = 525f, //526.37f, // focal length
-                                                                        M12 = 0f,
-                                                                        M13 = 320f, //313.69f, // 320 half x-res
-                                                                        M21 = 0f,
-                                                                        M22 = 525f, //526.37f, // focal length
-                                                                        M23 = 240f, //259.018f, // 240 half y-res
-                                                                        M33 = 1f
-                                                                    },
-                                             };
-
-        private Matrix depth_to_rgb_;
-
-    //    const float shift_offset_ = 1084.0f;
-            const float baseline_ = 75f; // 75mm 7.5 cm
-
-        public KinectCalibration()
-        {
-            var depth_model_ = PinholeCameraModel.FromCameraInfo(KinectDepthInfo);
-            var rgb_model_ = PinholeCameraModel.FromCameraInfo(KinectRgbInfo);
-
-            // Compute transform matrix from (u,v,d) of depth camera to (u,v) of RGB camera
-            // From (u,v,d,1) in depth image to (X,Y,Z,W) in depth camera frame
-            Matrix Q = new Matrix
-                           {
-                               M11 = 1, M12 = 0, M13 = 0, M14 = 0,
-                               M21 = 0, M22 = 1, M23 = 0, M24 = 0,
-                               M31 = 0, M32 = 0, M33 = 0, M34 = 1.0f /baseline_,
-                               M41 = -depth_model_.cx, M42 = -depth_model_.cy, M43 = depth_model_.fx, M44 = 0,
-                           };
-
-            Matrix Q1 = Matrix.Translation(-depth_model_.cx, -depth_model_.cy, 0f);
-
-              // From (X,Y,Z,W) in depth camera frame to RGB camera frame
-            Matrix S;
-/*
-              XmlRpc::XmlRpcValue rot, trans;
-              if (param_nh.getParam("depth_rgb_rotation", rot) &&
-                  param_nh.getParam("depth_rgb_translation", trans) &&
-                  rot.size() == 9 && trans.size() == 3)
-              {
-                S << rot[0], rot[1], rot[2], trans[0],
-                     rot[3], rot[4], rot[5], trans[1],
-                     rot[6], rot[7], rot[8], trans[2],
-                     0,      0,      0,      1;
-              }
-              else
-              {
-    ROS_WARN("Transform between depth and RGB cameras is not calibrated");
-*/
-            // shift 2.5cm
-            S = Matrix.Translation(-25f, 0, 0);
-
-            // From (X,Y,Z,W) in RGB camera frame to (u,v,w) in RGB image
-            Matrix P = new Matrix {
-                  M11 = rgb_model_.fx, M12 = 0,             M13 = 0,         M14 = 0,
-                  M21 = 0,             M22 = rgb_model_.fy, M23 = 0,         M24 = 0,
-                  M31 = rgb_model_.cx, M32 = rgb_model_.cy, M33 = 1,         M34 = 0
-            };
-
-            Matrix P1 = Matrix.Translation(rgb_model_.cx, rgb_model_.cy, 0) * Matrix.Scaling(rgb_model_.fx, rgb_model_.fy, 1);
-
-
-            // Putting it all together, from (u,v,d,1) in depth image to (u,v,w) in RGB image
-            depth_to_rgb_ = P1*S;
-        }
-
-        public Matrix DepthToRgb { get { return depth_to_rgb_; } }
     }
 }
