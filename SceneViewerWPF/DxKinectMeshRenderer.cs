@@ -286,6 +286,12 @@ namespace SceneViewerWPF
             set { _fillColor = value; }
         }
 
+        public DxLight Light
+        {
+            get { return _light; }
+            set { _light = value; }
+        }
+
         public void Update(float dt, float time)
         {
             // ignore

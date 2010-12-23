@@ -56,7 +56,9 @@
         			<System_Windows_Controls:AccordionItem Header="Rendering" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
         				<local:RenderingPropertyView x:Name="renderProps" Background="White" Padding="3"/>
         			</System_Windows_Controls:AccordionItem>
-        			<System_Windows_Controls:AccordionItem Header="Light" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        			<System_Windows_Controls:AccordionItem Header="Light" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        				<local:LightPropertyView x:Name="lightProps" Background="White" Padding="3"/>
+        			</System_Windows_Controls:AccordionItem>
         		</System_Windows_Controls:Accordion>
         	</Grid>
         </Border>

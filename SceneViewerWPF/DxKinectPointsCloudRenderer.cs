@@ -18,6 +18,7 @@ namespace SceneViewerWPF
 
         float Scale { get; set; }
         Vector4 FillColor { get; set; }
+        DxLight Light { get; set; }
     }
 
     public interface IRenderer : IDisposable
@@ -74,6 +75,7 @@ namespace SceneViewerWPF
 
         private Matrix _depthToRgb;
         private EffectMatrixVariable _depthToRgbVar;
+        private DxLight _light;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct PointVertex
@@ -103,6 +105,12 @@ namespace SceneViewerWPF
         {
             get { return _fillColor; }
             set { _fillColor = value; }
+        }
+
+        public DxLight Light
+        {
+            get { return _light; }
+            set { _light = value; }
         }
 
         public DxKinectPointsCloudRenderer(Device dxDevice)

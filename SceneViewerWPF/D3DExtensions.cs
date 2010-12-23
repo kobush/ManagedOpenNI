@@ -7,6 +7,11 @@ namespace SceneViewerWPF
 {
     internal static class D3DExtensions
     {
+        public static Vector4 ToVector4(this System.Windows.Media.Color thisColor)
+        {
+            return new Vector4(thisColor.ScR, thisColor.ScG, thisColor.ScB, thisColor.ScA);
+        }
+
         public static Vector3 ToVector3(this System.Windows.Media.Media3D.Vector3D thisVector)
         {
             return new Vector3((float) thisVector.X, (float) thisVector.Y, (float) thisVector.Z);

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Timers;
 using System.Windows;
@@ -33,6 +34,7 @@ namespace SceneViewerWPF
             cameraProps.SelectedCameraModeChanged += OnSelectedCameraModeChanged;
             renderProps.SelectedRenderTechChanged += OnSelectedRenderTechChanged;
             renderProps.RenderPropertyChanged += OnRendererPropertyChanged;
+            lightProps.ViewModel.PropertyChanged += OnLightPropertyChanged;
         }
 
         void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -54,8 +56,8 @@ namespace SceneViewerWPF
             helixView.Camera.LookDirection = new Point3D(0, 0, 100) - helixView.Camera.Position;
             helixView.Camera.UpDirection = new Vector3D(0,1,0);
             helixView.Camera.FarPlaneDistance = 2000; // this is about 20 meters
-            helixView.CameraChanged += delegate { UpdateCameraDisplay(); };
-            UpdateCameraDisplay();
+            helixView.CameraChanged += delegate { UpdateCameraPosition(); };
+            UpdateCameraPosition();
 
             BeginRenderingScene();
 
@@ -169,11 +171,17 @@ namespace SceneViewerWPF
             textFrameRate.Text = _frameCounter.FramesPerSecond.ToString("f1");
         }
 
-        private void UpdateCameraDisplay()
+        private void UpdateCameraPosition()
         {
             var camera = (PerspectiveCamera) helixView.Camera;
 
             cameraProps.UpdateCamera(camera);
+
+            if (lightProps.ViewModel.Headlight)
+            {
+                lightProps.ViewModel.Position = camera.Position;
+                lightProps.ViewModel.Direction = camera.LookDirection;
+            }
 
             if (_dxScene != null)
             {
@@ -202,6 +210,14 @@ namespace SceneViewerWPF
                             renderProps.FillColor.ScG,
                             renderProps.FillColor.ScB,
                             (float) (1.0 - renderProps.TextureAlpha));
+        }
+
+        private void OnLightPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
+        {
+            if (_dxScene != null)
+            {
+                _dxScene.PointsCloudRenderer.Light = lightProps.ViewModel.GetLight();
+            }
         }
     }
 }

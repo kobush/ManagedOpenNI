@@ -36,11 +36,14 @@ struct VS_IN
 
 struct VS_OUT
 {
+	float4 posH : SV_POSITION;
     float3 posW : POSITION;
 	float3 normalW : NORMAL;
     float2 texC : TEXCOORD;
 	float sizeW : SIZE;
 };
+
+//--------------------------------------------------------------------------------------
 
 bool InBounds(int x, int y)
 {
@@ -102,6 +105,7 @@ VS_OUT VS(VS_IN vIn)
 
 	VS_OUT vOut;
 	vOut.posW =  mul(float4(v0.xyz, 1.0), gWorld).xyz;
+	vOut.posH = mul(float4(vOut.posW, 1.0f), gViewProj);
 	vOut.sizeW = mul(float4(v0.w, 0.0, 0.0, 1.0), gWorld).x;
 	
 	// transform to RGB camera space
@@ -138,10 +142,11 @@ VS_OUT VS(VS_IN vIn)
 
 		int o = 1;
 		float4 v1 = ComputeVertexPosSizeW(vIn.pos.x - o, vIn.pos.y);
-		float4 v2 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y - o);
+		float4 v2 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y + o);
 		float4 v3 = ComputeVertexPosSizeW(vIn.pos.x + o, vIn.pos.y);
-		float4 v4 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y + o);
+		float4 v4 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y - o);
 
+		// average face normals
 		// pixelSize will be 0 for invalid vertices
 		if (v1.w > 0 && v2.w > 0)
 			normal += ComputeFaceNormal(v0.xyz, v1.xyz, v2.xyz); 
@@ -152,7 +157,9 @@ VS_OUT VS(VS_IN vIn)
 		if (v4.w > 0 && v1.w > 0)
 			normal += ComputeFaceNormal(v0.xyz, v4.xyz, v1.xyz); 
 
-		// average face normals
+		// transform to world space (??)
+		//normal = mul(float4(normal, 1.0), gWorld).xyz;
+		
 		vOut.normalW = normalize(normal);
 	    return vOut;
 	}
@@ -193,14 +200,13 @@ void GS(triangle VS_OUT gIn[3], inout TriangleStream<GS_OUT> triStream)
 	if (d1 > avgSize || d2 > avgSize || d3 > avgSize)
 		return;
 
-	//float3 normalW = ComputeFaceNormal(gIn[0].posW, gIn[2].posW, gIn[1].posW);
-
 	// output new face
 	[unroll]
 	for(int i = 0; i < 3; ++i)
 	{
+		// copy to output stream
 		gOut.posW = gIn[i].posW;
-		gOut.posH = mul(float4(gOut.posW, 1.0f), gViewProj);
+		gOut.posH = gIn[i].posH;
 		gOut.texC = gIn[i].texC; 
 		gOut.normalW = gIn[i].normalW;
 		triStream.Append(gOut);

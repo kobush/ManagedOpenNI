@@ -1,11 +1,12 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 using SlimDX;
 using SlimDX.Direct3D10;
 
 namespace SceneViewerWPF
 {
     [StructLayout(LayoutKind.Sequential)]
-    public struct DxLight
+    public struct DxLight 
     {
         private Vector3 _pos;
         private float ___pad1;
@@ -19,7 +20,7 @@ namespace SceneViewerWPF
         private float _range;
         private int _type;
 
-// ReSharper disable ConvertToAutoProperty
+        // ReSharper disable ConvertToAutoProperty
         public Vector3 Position
         {
             get { return _pos; }

@@ -1,0 +1,61 @@
+﻿<UserControl
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:local="clr-namespace:SceneViewerWPF" xmlns:extToolkit="http://schemas.microsoft.com/winfx/2006/xaml/presentation/toolkit/extended"
+	mc:Ignorable="d"
+	x:Class="SceneViewerWPF.LightPropertyView"
+	x:Name="UserControl"
+	d:DesignWidth="225" d:DesignHeight="221" UseLayoutRounding="True">
+
+	<UserControl.Resources>
+		<local:ViewModelLocator x:Key="ViewModelLocatorDataSource" d:IsDataSource="True"/>
+	</UserControl.Resources>
+	<UserControl.DataContext>
+		<Binding Mode="OneWay" Path="LightPropertyViewModel" Source="{StaticResource ViewModelLocatorDataSource}"/>
+	</UserControl.DataContext>
+
+	<Grid x:Name="LayoutRoot">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition/>
+		</Grid.RowDefinitions>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="Auto" MinWidth="50" />
+			<ColumnDefinition Width="*" />
+		</Grid.ColumnDefinitions>
+		<Label Content="Light Type:" VerticalAlignment="Center" />
+		<ComboBox Grid.Column="1" Grid.Row="0" Padding="4,2,4,3" Margin="0,2" SelectedValue="{Binding LightType}" SelectedValuePath="Tag">
+			<ComboBoxItem IsSelected="True" Tag="{x:Static local:DxLightType.None}" Content="None"/>
+			<ComboBoxItem Tag="{x:Static local:DxLightType.Parallel}" Content="Parallel"/>
+			<ComboBoxItem Tag="{x:Static local:DxLightType.Point}" Content="Point"/>
+			<ComboBoxItem Tag="{x:Static local:DxLightType.Spot}" Content="Spot"/>
+		</ComboBox>
+		
+		<Label Content="Ambient:" Grid.Row="1" VerticalAlignment="Center" />
+		<extToolkit:ColorPicker Grid.Column="1" Grid.Row="1" SelectedColor="{Binding Ambient}" 
+			Margin="0,3"/>
+		<Label Content="Diffuse:" Grid.Row="2" VerticalAlignment="Center" />
+		<extToolkit:ColorPicker Grid.Column="1" Grid.Row="2" SelectedColor="{Binding Diffuse}" 
+			Margin="0,3"/>
+		<Label Content="Specular:" Grid.Row="3" VerticalAlignment="Center" />
+		<extToolkit:ColorPicker Grid.Column="1" Grid.Row="3" SelectedColor="{Binding Specular}" 
+			Margin="0,3"/>
+
+		<Label Content="Position: " VerticalAlignment="Center" Grid.Row="4"/>
+		<TextBlock Grid.Column="1" FontWeight="Bold" Grid.Row="4" Text="{Binding PositionText, Mode=OneWay}" VerticalAlignment="Center"/>
+
+		<Label Content="Direction: " VerticalAlignment="Center" Grid.Row="5"/>
+		<TextBlock Grid.Column="1" FontWeight="Bold" Grid.Row="5" Text="{Binding DirectionText, Mode=OneWay}" VerticalAlignment="Center"/>
+
+		<CheckBox Content="Head light" Grid.Column="1" Grid.Row="6" IsChecked="{Binding Headlight}" />
+        
+	</Grid>
+</UserControl>
