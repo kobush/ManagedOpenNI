@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ManagedNiteEx;
+using SlimDX;
 
 namespace SceneViewerWPF
 {
@@ -18,6 +19,13 @@ namespace SceneViewerWPF
 
         private AsyncStateData _currentState;
         private KinectFrame _currentFrame;
+
+        private KinectCameraInfo _cameraInfo;
+
+        public KinectCameraInfo CameraInfo
+        {
+            get { return _cameraInfo; }
+        }
 
         public KinectFrame CurrentFrame
         {
@@ -96,10 +104,11 @@ namespace SceneViewerWPF
 
                     asyncData.AsyncOperation.SynchronizationContext.Send(
                         delegate
-                            {
-                                UpdateDataRecord();
-                                InvokeTrackingUpdated(EventArgs.Empty);
-                            }, null);
+                        {
+                            //UpdateCameraInfo();
+                            UpdateFrameData();
+                            InvokeTrackingUpdated(EventArgs.Empty);
+                        }, null);
 
                 }
             }
@@ -115,7 +124,7 @@ namespace SceneViewerWPF
                 _niContext = new XnMOpenNIContextEx();
                 _niContext.InitFromXmlFile("openni.xml");
 
-                _imageNode = (XnMImageGenerator) _niContext.FindExistingNode(XnMProductionNodeType.Image);
+                _imageNode = (XnMImageGenerator)_niContext.FindExistingNode(XnMProductionNodeType.Image);
                 _imageMeta = new XnMImageMetaData();
                 _imageNode.GetMetaData(_imageMeta);
 
@@ -123,7 +132,7 @@ namespace SceneViewerWPF
                     throw new InvalidOperationException("Only RGB24 pixel format is supported");
 
                 // add depth node
-                _depthNode = (XnMDepthGenerator) _niContext.FindExistingNode(XnMProductionNodeType.Depth);
+                _depthNode = (XnMDepthGenerator)_niContext.FindExistingNode(XnMProductionNodeType.Depth);
                 _depthMeta = new XnMDepthMetaData();
                 _depthNode.GetMetaData(_depthMeta);
 
@@ -134,16 +143,17 @@ namespace SceneViewerWPF
                     throw new InvalidOperationException("Image and depth map must have the same resolution");
 
                 // add scene node
-                _sceneNode = (XnMSceneAnalyzer) _niContext.FindExistingNode(XnMProductionNodeType.Scene);
+                _sceneNode = (XnMSceneAnalyzer)_niContext.FindExistingNode(XnMProductionNodeType.Scene);
                 _sceneMeta = new XnMSceneMetaData();
                 _sceneNode.GetMetaData(_sceneMeta);
 
                 asyncData.AsyncOperation.SynchronizationContext.Send(
                     delegate
-                        {
-                            UpdateDataRecord();
-                            InvokeTrackinkgStarted(EventArgs.Empty);
-                        }, null);
+                    {
+                        UpdateCameraInfo();
+                        UpdateFrameData();
+                        InvokeTrackinkgStarted(EventArgs.Empty);
+                    }, null);
 
                 return true;
             }
@@ -153,23 +163,14 @@ namespace SceneViewerWPF
             }
         }
 
-        private void UpdateDataRecord()
+        private void UpdateFrameData()
         {
             if (_currentFrame == null)
                 _currentFrame = new KinectFrame();
 
-            _currentFrame.FrameId = (int) _imageMeta.FrameID;
-            _currentFrame.XRes = (int) _imageMeta.XRes;
-            _currentFrame.YRes = (int) _imageMeta.YRes;
-            _currentFrame.ZRes = (int) _depthMeta.ZRes;
+            _currentFrame.FrameId = (int)_imageMeta.FrameID;
 
-            // get the focal length in mm (ZPS = zero plane distance)/ focal length
-            _currentFrame.ZeroPlaneDistance = _depthNode.GetIntProperty("ZPD");
-
-            // get the pixel size in mm ("ZPPS" = pixel size at zero plane) 
-            _currentFrame.ZeroPlanePixelSize = _depthNode.GetRealProperty("ZPPS");
-
-            int imageSize = (int) (_imageMeta.XRes*_imageMeta.YRes*3);
+            int imageSize = (int)(_imageMeta.XRes * _imageMeta.YRes * 3);
             Debug.Assert(imageSize == _imageMeta.DataSize);
 
             if (_currentFrame.ImageMap == null || _currentFrame.ImageMap.Length != imageSize)
@@ -178,28 +179,80 @@ namespace SceneViewerWPF
             // copy image data
             Marshal.Copy(_imageMeta.Data, _currentFrame.ImageMap, 0, imageSize);
 
-            int depthSize = (int) (_depthMeta.XRes*_depthMeta.YRes);
+            int depthSize = (int)(_depthMeta.XRes * _depthMeta.YRes);
             Debug.Assert(depthSize * sizeof(ushort) == _depthMeta.DataSize);
 
             if (_currentFrame.DepthMap == null || _currentFrame.DepthMap.Length != depthSize)
                 _currentFrame.DepthMap = new short[depthSize];
 
+            // copy depth data
             Marshal.Copy(_depthMeta.Data, _currentFrame.DepthMap, 0, depthSize);
+        }
+
+        private void UpdateCameraInfo()
+        {
+            if (_cameraInfo == null)
+                _cameraInfo = new KinectCameraInfo();
+
+            _cameraInfo.XRes = (int) _imageMeta.XRes;
+            _cameraInfo.YRes = (int) _imageMeta.YRes;
+            _cameraInfo.ZRes = (int) _depthMeta.ZRes;
+
+            // get the focal length in mm (ZPS = zero plane distance)/ focal length
+            //  _imageCameraInfo.ZeroPlaneDistance = _imageNode.GetIntProperty("ZPD");
+            _cameraInfo.ZeroPlaneDistance = _depthNode.GetIntProperty("ZPD");
+
+            // get the pixel size in mm ("ZPPS" = pixel size at zero plane) 
+            // _imageCameraInfo.ZeroPlanePixelSize = _imageNode.GetRealProperty("ZPPS") * 2.0;
+            _cameraInfo.ZeroPlanePixelSize = _depthNode.GetRealProperty("ZPPS")*2.0;
+
+            _cameraInfo.FocalLengthImage = 525f;
+            _cameraInfo.FocalLengthDetph = _cameraInfo.ZeroPlaneDistance/_cameraInfo.ZeroPlanePixelSize;
+
+            // get base line (distance from IR camera to laser projector in cm)
+            _cameraInfo.Baseline = _depthNode.GetRealProperty("LDDIS")*10;
+            _cameraInfo.ShadowValue = _depthNode.GetIntProperty("ShadowValue");
+            _cameraInfo.NoSampleValue = _depthNode.GetIntProperty("NoSampleValue");
+
+            // best guess
+            _cameraInfo.DepthToRgb  = Matrix.Translation(35f, 15f, 0f);
+
+/*
+            //from ROS calibraition
+            _cameraInfo.DepthToRgb = new Matrix
+                                         {
+                                            M11 =  1f,        M21 = 0.006497f, M31 = -0.000801f, M41 = -25.165f,  
+                                            M12 = -0.006498f, M22 = 1f,        M32 = -0.001054f, M42 = 0.047f, 
+                                            M13 =  0.000794f, M23 = 0.001059f, M33 =  1f,        M43 = -4.077f,
+                                            M14 =  0f,        M24 = 0f,        M34 =  0f,        M44 = 1f
+                                         };
+*/
         }
     }
 
-    public class KinectFrame
+        public class KinectFrame
     {
         public int FrameId { get; set; }
 
         public byte[] ImageMap { get; set; }
         public short[] DepthMap { get; set; }
+    }
 
+    public class KinectCameraInfo
+    {
         public int XRes { get; set; }
         public int YRes { get; set; }
         public int ZRes { get; set; }
-
-        public double ZeroPlaneDistance { get; set; } // or focal length
+        public double ZeroPlaneDistance { get; set; }
         public double ZeroPlanePixelSize { get; set; }
-   }
+
+        public double FocalLengthDetph { get; set; }
+        public double FocalLengthImage { get; set; }
+        
+        public double Baseline { get; set; }
+        public ulong ShadowValue { get; set; }
+        public ulong NoSampleValue { get; set; }
+
+        public Matrix DepthToRgb { get; set; }
+    }
 }

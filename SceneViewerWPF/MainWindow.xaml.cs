@@ -72,7 +72,8 @@ namespace SceneViewerWPF
             busyIndicator.IsBusy = false;
 
             if (_dxScene == null) return;
-            _dxScene.PointsCloudRenderer.Init(((KinectTracker)sender).CurrentFrame);
+            var tracker = ((KinectTracker) sender);
+            _dxScene.PointsCloudRenderer.Init(tracker.CurrentFrame, tracker.CameraInfo);
         }
 
         private void OnKinectTrackingUpdated(object sender, EventArgs e)
@@ -81,7 +82,8 @@ namespace SceneViewerWPF
 
             if (freezeUpdates.IsChecked != true)
             {
-                _dxScene.PointsCloudRenderer.Update(((KinectTracker) sender).CurrentFrame);
+                var tracker = ((KinectTracker)sender);
+                _dxScene.PointsCloudRenderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
             }
         }
 
@@ -92,7 +94,8 @@ namespace SceneViewerWPF
 
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            _kinectTracker.StopTracking();
+            if (_kinectTracker != null)
+                _kinectTracker.StopTracking();
 
             StopRenderingScene();
 

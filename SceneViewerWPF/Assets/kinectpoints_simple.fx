@@ -6,20 +6,19 @@ cbuffer cbPerFrame {
 	float3	gEyePosW;
 	float4	gFillColor;
 	matrix	gViewProj;
+	matrix  gWorld;
 };
 
 cbuffer cb0 {
-	float gZeroPlanePixelSize;
-	float gZeroPlaneDistance;
-	float gScale;
+	matrix gDepthToRgb;
+	float gFocalLengthDepth = 580.0;
+	float gFocalLengthImage = 525.0;
 	float2 gRes;
 }
 
 Texture2D gImageMap;
 
 Buffer<uint> gDepthMap;
-
-
 
 //--------------------------------------------------------------------------------------
 // Vertex Shader
@@ -43,15 +42,39 @@ VS_OUT VS(VS_IN vIn)
 {
 	VS_OUT vOut;
 
-	uint depth = gDepthMap.Load(gRes.x * vIn.pos.y + vIn.pos.x);
-	float pixelSize = depth * gZeroPlanePixelSize * gScale / gZeroPlaneDistance;
+	float u = vIn.pos.x;
+	float v = vIn.pos.y;
 
-	vOut.centerW.x = (vIn.pos.x - gRes.x / 2.0) * pixelSize;
-	vOut.centerW.y = (gRes.y / 2.0 - vIn.pos.y) * pixelSize;
-	vOut.centerW.z = depth * gScale; 
+	// depth in mm
+	uint depth = gDepthMap.Load(gRes.x * v + u);
 
-	vOut.sizeW = float2(pixelSize *1.2, pixelSize*1.2);
-	vOut.texC = float2(vIn.pos.x / gRes.x, vIn.pos.y / gRes.y);
+	float pixelSize = depth / gFocalLengthDepth;
+	float4 pos;
+	pos.x = (u - gRes.x / 2.0) * pixelSize;
+	pos.y = (v - gRes.y / 2.0) * pixelSize;
+	pos.z = depth;
+	pos.w = 1.0;
+	
+	// transform to world 
+	vOut.centerW = mul(pos, gWorld).xyz; 
+	vOut.sizeW = mul(float4(pixelSize *1.2, pixelSize*1.2, 0, 0), gWorld).xy;
+
+	//float4 uvd1 = float4(pos.xyz, 1);
+	//float3 uvw = mul(uvd1, gDepthToRgb).xyz;
+	//vOut.texC = float2((uvw.x/uvw.z + 0.5) / gRes.x, (uvw.y/uvw.z + 0.5) / gRes.y);
+
+	// transform to RGB camera space
+	//pos.x = pos.x + 35.0f;
+	//pos.y = pos.y + 15.0f;
+	pos = mul(pos, gDepthToRgb);
+
+	// transform to image frame
+	u = pos.x * (gFocalLengthImage / pos.z) + (gRes.x / 2.0);
+	v = pos.y * (gFocalLengthImage / pos.z) + (gRes.y / 2.0);
+
+	// map to texture coord. [0..1]
+	vOut.texC = float2(u / gRes.x, v / gRes.y);
+
     return vOut;
 }
 
@@ -122,7 +145,7 @@ void GS(point VS_OUT gIn[1], inout TriangleStream<GS_OUT> triStream)
 	for(int i = 0; i < 4; ++i)
 	{
 		gOut.posH = mul(v[i], WVP);
-		gOut.posW = mul(v[i], W); // implicit truncation
+		gOut.posW = mul(v[i], W).xyz; // implicit truncation
 		gOut.normalW = look;
 		gOut.texC = gIn[0].texC; //texC[i];
 		gOut.diffuse = float4(c, c, 0.0f, 1.0);

@@ -9,20 +9,19 @@ cbuffer cbPerFrame {
 	float3	gEyePosW;
 	float4	gFillColor;
 	matrix	gViewProj;
+	matrix  gWorld;
 };
 
 cbuffer cb0 {
-	float gZeroPlanePixelSize;
-	float gZeroPlaneDistance;
-	float gScale;
+	matrix gDepthToRgb;
+	float gFocalLengthDepth = 580.0;
+	float gFocalLengthImage = 525.0;
 	float2 gRes;
 }
 
 Texture2D gImageMap;
 
 Buffer<uint> gDepthMap;
-
-
 
 //--------------------------------------------------------------------------------------
 // Vertex Shader
@@ -76,13 +75,15 @@ float4 ComputeVertexPosSizeW(int x, int y)
 	}
 	else 
 	{
-		float pixelSize = depth * gZeroPlanePixelSize * gScale / gZeroPlaneDistance;
+		float pixelSize = depth / gFocalLengthDepth;
 
-		float3 posW;
-		posW.x = (x - gRes.x / 2.0) * pixelSize;
-		posW.y = (gRes.y / 2.0 - y) * pixelSize;
-		posW.z = depth * gScale; 
-		return float4(posW, pixelSize);
+		float4 pos;
+		pos.x = (x - gRes.x / 2.0) * pixelSize;
+		pos.y = (y - gRes.y / 2.0) * pixelSize;
+		pos.z = depth;
+		pos.w = pixelSize;
+
+		return pos;
 	}
 }
 
@@ -95,18 +96,31 @@ float3 ComputeFaceNormal(float3 p0, float3 p1, float3 p2)
 
 VS_OUT VS(VS_IN vIn)
 {
-	float4 v0 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y);
+	float u = vIn.pos.x;
+	float v = vIn.pos.y;
+	float4 v0 = ComputeVertexPosSizeW(u, v);
 
 	VS_OUT vOut;
-	vOut.posW = v0.xyz;
-	vOut.sizeW = v0.w;
-	vOut.texC = float2(vIn.pos.x / gRes.x, vIn.pos.y / gRes.y);
-
-	float3 normal = float3(0,0,0);
+	vOut.posW =  mul(float4(v0.xyz, 1.0), gWorld).xyz;
+	vOut.sizeW = mul(float4(v0.w, 0.0, 0.0, 1.0), gWorld).x;
 	
+	// transform to RGB camera space
+	float4 pos = mul(float4(v0.xyz, 1.0), gDepthToRgb);
+
+	// transform to image frame
+	u = pos.x * (gFocalLengthImage / pos.z) + (gRes.x / 2.0);
+	v = pos.y * (gFocalLengthImage / pos.z) + (gRes.y / 2.0);
+
+	vOut.texC = float2(u / gRes.x, v / gRes.y);
+
 	// don't bother with normal if lighting is not used
 	[branch]
-	if (gLight.type != 0) 
+	if (gLight.type == 0) 
+	{
+		vOut.normalW = float3(0,0,0);
+		return vOut;
+	}
+	else 
 	{
 		/* compute positions of neighbours
 
@@ -118,6 +132,9 @@ VS_OUT VS(VS_IN vIn)
 		    \  | /
 			  v4
 		*/
+
+		float3 normal = float3(0,0,0);
+	
 
 		int o = 1;
 		float4 v1 = ComputeVertexPosSizeW(vIn.pos.x - o, vIn.pos.y);
@@ -136,10 +153,9 @@ VS_OUT VS(VS_IN vIn)
 			normal += ComputeFaceNormal(v0.xyz, v4.xyz, v1.xyz); 
 
 		// average face normals
-		normal = normalize(normal);
+		vOut.normalW = normalize(normal);
+	    return vOut;
 	}
-	vOut.normalW = normal;
-    return vOut;
 }
 
 //--------------------------------------------------------------------------------------

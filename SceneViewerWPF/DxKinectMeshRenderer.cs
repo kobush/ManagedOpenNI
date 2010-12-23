@@ -29,9 +29,10 @@ namespace SceneViewerWPF
         private Effect _effect;
         private EffectTechnique _renderTech;
         private InputLayout _inputLayout;
+
         private EffectVectorVariable _eyePosWVar;
         private EffectMatrixVariable _viewProjVar;
-        private EffectVectorVariable _fillColorVar;
+        private EffectMatrixVariable _worldVar;
 
         private Texture2D _imageTexture;
         private ShaderResourceView _imageTextureRV;
@@ -41,18 +42,23 @@ namespace SceneViewerWPF
         private ShaderResourceView _depthMapBufferRV;
         private EffectResourceVariable _depthMapVar;
 
-        private float _zeroPlanePixelSize;
-        private float _zeroPlaneDistance;
         private float _vertexScale = 0.1f; // Scale from mm to cm!
 
-        private EffectScalarVariable _zeroPlanePixelSizeVar;
-        private EffectScalarVariable _zeroPlaneDistanceVar;
-        private EffectScalarVariable _scaleVar;
+        private float _focalLengthDepth;
+        private float _focalLengthImage;
+
+        private EffectScalarVariable _focalLengthDepthVar;
+        private EffectScalarVariable _focalLengthImageVar;
         private EffectVectorVariable _resVar;
+
+        private Matrix _depthToRgb;
+        private EffectMatrixVariable _depthToRgbVar;
+
         private DxLight _light;
         private EffectVariable _lightVariable;
         private bool _headlight;
         private Vector4 _fillColor;
+        private EffectVectorVariable _fillColorVar;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct PointVertex
@@ -88,16 +94,17 @@ namespace SceneViewerWPF
 
             _eyePosWVar = _effect.GetVariableByName("gEyePosW").AsVector();
             _viewProjVar = _effect.GetVariableByName("gViewProj").AsMatrix();
+            _worldVar = _effect.GetVariableByName("gWorld").AsMatrix();
             _fillColorVar = _effect.GetVariableByName("gFillColor").AsVector();
             _lightVariable = _effect.GetVariableByName("gLight");
 
             _imageMapVar = _effect.GetVariableByName("gImageMap").AsResource();
             _depthMapVar = _effect.GetVariableByName("gDepthMap").AsResource();
 
-            _zeroPlanePixelSizeVar = _effect.GetVariableByName("gZeroPlanePixelSize").AsScalar();
-            _zeroPlaneDistanceVar = _effect.GetVariableByName("gZeroPlaneDistance").AsScalar();
-            _scaleVar = _effect.GetVariableByName("gScale").AsScalar();
             _resVar = _effect.GetVariableByName("gRes").AsVector();
+            _depthToRgbVar = _effect.GetVariableByName("gDepthToRgb").AsMatrix();
+            _focalLengthDepthVar = _effect.GetVariableByName("gFocalLengthDepth").AsScalar();
+            _focalLengthImageVar = _effect.GetVariableByName("gFocalLengthImage").AsScalar();
 
             ShaderSignature signature = _renderTech.GetPassByIndex(0).Description.Signature;
             _inputLayout = new InputLayout(_dxDevice, signature,
@@ -105,11 +112,17 @@ namespace SceneViewerWPF
                                                  });
         }
 
-        public void Init(KinectFrame frame)
+        public void Init(KinectFrame frame, KinectCameraInfo cameraInfo)
         {
             _initialized = true;
-            _xRes = frame.XRes;
-            _yRes = frame.YRes;
+
+            // store variables
+            _xRes = cameraInfo.XRes;
+            _yRes = cameraInfo.YRes;
+
+            _focalLengthImage = (float)cameraInfo.FocalLengthImage;
+            _focalLengthDepth = (float)cameraInfo.FocalLengthDetph;
+            _depthToRgb = cameraInfo.DepthToRgb;
 
             CreateVertexBuffer();
             CreateIndexBuffer();
@@ -223,14 +236,10 @@ namespace SceneViewerWPF
 
         }
 
-        public void Update(KinectFrame frame)
+        public void Update(KinectFrame frame, KinectCameraInfo cameraInfo)
         {
             if (!_initialized)
-                Init(frame);
-
-            // store variables
-            _zeroPlanePixelSize = (float)frame.ZeroPlanePixelSize * 2f;
-            _zeroPlaneDistance = (float)frame.ZeroPlaneDistance;
+                Init(frame, cameraInfo);
 
             // update texture
             if (_imageTexture != null)
@@ -287,9 +296,15 @@ namespace SceneViewerWPF
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
+            _worldVar.SetMatrix(Matrix.Scaling(Scale, -Scale, Scale));
             _eyePosWVar.Set(camera.Eye);
             _viewProjVar.SetMatrix(camera.View*camera.Projection);
             _fillColorVar.Set(_fillColor);
+
+            _resVar.Set(new Vector2(_xRes, _yRes));
+            _focalLengthDepthVar.Set(_focalLengthDepth);
+            _focalLengthImageVar.Set(_focalLengthImage);
+            _depthToRgbVar.SetMatrix(_depthToRgb);
 
             if (_headlight)
             {
@@ -297,11 +312,6 @@ namespace SceneViewerWPF
                 _light.Direction = camera.At - camera.Eye;
             }
             _light.SetEffectVariable(_lightVariable);
-
-            _resVar.Set(new Vector2(_xRes, _yRes));
-            _zeroPlaneDistanceVar.Set(_zeroPlaneDistance);
-            _zeroPlanePixelSizeVar.Set(_zeroPlanePixelSize);
-            _scaleVar.Set(_vertexScale);
 
             _depthMapVar.SetResource(_depthMapBufferRV);
             _imageMapVar.SetResource(_imageTextureRV);
