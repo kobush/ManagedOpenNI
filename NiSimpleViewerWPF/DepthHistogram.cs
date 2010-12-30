@@ -2,7 +2,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using ManagedNiteEx;
+using xn;
 
 namespace NiSimpleViewerWPF
 {
@@ -11,7 +11,7 @@ namespace NiSimpleViewerWPF
         private float[] _depthHist;
         const int MaxDepth = 10000;
 
-        public void Update(XnMDepthMetaData depthMeta)
+        public void Update(DepthMetaData depthMeta)
         {
             if (_depthHist == null)
                 _depthHist = new float[MaxDepth];
@@ -20,7 +20,7 @@ namespace NiSimpleViewerWPF
 
             int numPoints = 0;
 
-            short* ptrDepth = (short*)depthMeta.Data;
+            ushort* ptrDepth = (ushort*)depthMeta.DepthMapPtr;
             for (int y = 0; y < depthMeta.YRes; y++)
             {
                 for (int x = 0; x < depthMeta.XRes; x++)
@@ -48,7 +48,7 @@ namespace NiSimpleViewerWPF
             }
         }
 
-        public void Paint(XnMDepthMetaData depthMeta, WriteableBitmap b)
+        public void Paint(DepthMetaData depthMeta, WriteableBitmap b)
         {
             if (b.Format == PixelFormats.Gray16)
                 PaintGray16(b, depthMeta);
@@ -56,18 +56,18 @@ namespace NiSimpleViewerWPF
                 PaintPbgra32(b, depthMeta);
         }
 
-        private void PaintPbgra32(WriteableBitmap b, XnMDepthMetaData depthMeta)
+        private void PaintPbgra32(WriteableBitmap b, DepthMetaData depthMeta)
         {
             b.Lock();
 
-            short* pDepthRow = (short*)depthMeta.Data;
+            ushort* pDepthRow = (ushort*)depthMeta.DepthMapPtr;
 
             int nTexMapX = b.BackBufferStride;
             byte* pTexRow = (byte*)b.BackBuffer + depthMeta.YOffset * nTexMapX;
 
             for (int y = 0; y < depthMeta.YRes; y++)
             {
-                short* pDepth = pDepthRow;
+                ushort* pDepth = pDepthRow;
                 byte* pTex = pTexRow + depthMeta.XOffset;
 
                 for (int x = 0; x < depthMeta.XRes; x++)
@@ -100,25 +100,25 @@ namespace NiSimpleViewerWPF
             b.Unlock();
         }
 
-        private void PaintGray16(WriteableBitmap b, XnMDepthMetaData depthMeta)
+        private void PaintGray16(WriteableBitmap b, DepthMetaData depthMeta)
         {
             b.Lock();
 
-            short* pDepthRow = (short*) depthMeta.Data;
+            ushort* pDepthRow = (ushort*) depthMeta.DepthMapPtr;
 
             int nTexMapX = b.BackBufferStride / (b.Format.BitsPerPixel / 8);
-            short* pTexRow = (short*) b.BackBuffer + depthMeta.YOffset*nTexMapX;
+            ushort* pTexRow = (ushort*) b.BackBuffer + depthMeta.YOffset*nTexMapX;
 
             for (int y = 0; y < depthMeta.YRes; y++)
             {
-                short* pDepth = pDepthRow;
-                short* pTex = pTexRow + depthMeta.XOffset;
+                ushort* pDepth = pDepthRow;
+                ushort* pTex = pTexRow + depthMeta.XOffset;
 
                 for (int x = 0; x < depthMeta.XRes; x++)
                 {
                     if (*pDepth != 0)
                     {
-                        *pTex = (short) _depthHist[*pDepth];
+                        *pTex = (ushort) _depthHist[*pDepth];
                     }
                     else
                     {

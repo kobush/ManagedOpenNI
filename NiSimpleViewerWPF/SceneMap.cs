@@ -2,7 +2,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using ManagedNiteEx;
+using xn;
 
 namespace NiSimpleViewerWPF
 {
@@ -17,25 +17,25 @@ namespace NiSimpleViewerWPF
 
         Dictionary<int, Color> _labelMap = new Dictionary<int, Color>();
 
-        public void Update(XnMSceneMetaData sceneMeta)
+        public void Update(SceneMetaData sceneMeta)
         {
 
         }
             
-        public void Paint(XnMSceneMetaData sceneMeta, WriteableBitmap b)
+        public void Paint(SceneAnalyzer sceneNode, DepthMetaData sceneMeta, WriteableBitmap b)
         {
             b.Lock();
 
             unsafe
             {
-                short* pLabelRow = (short*)sceneMeta.Data;
+                ushort* pLabelRow = (ushort*)sceneNode.GetLabelMapPtr();
 
                 int nTexMapX = b.BackBufferStride;
                 byte* pTexRow = (byte*)b.BackBuffer + sceneMeta.YOffset * nTexMapX;
 
                 for (int y = 0; y < sceneMeta.YRes; y++)
                 {
-                    short* pLabel = pLabelRow;
+                    ushort* pLabel = pLabelRow;
                     byte* pTex = pTexRow + sceneMeta.XOffset;
 
                     for (int x = 0; x < sceneMeta.XRes; x++)

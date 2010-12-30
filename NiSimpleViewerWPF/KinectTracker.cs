@@ -5,7 +5,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using ManagedNiteEx;
+using xn;
+using PixelFormat = System.Windows.Media.PixelFormat;
 
 namespace NiSimpleViewerWPF
 {
@@ -21,13 +22,14 @@ namespace NiSimpleViewerWPF
         private WriteableBitmap _sceneImageSource;
 
         private AsyncStateData _currentState;
-        private XnMOpenNIContextEx _niContext;
-        private XnMImageGenerator _imageNode;
-        private XnMImageMetaData _imageMeta;
-        private XnMDepthGenerator _depthNode;
-        private XnMDepthMetaData _depthMeta;
-        private XnMSceneAnalyzer _sceneNode;
-        private XnMSceneMetaData _sceneMeta;
+        private Context _niContext;
+        private ImageGenerator _imageNode;
+        private ImageMetaData _imageMeta;
+        private DepthGenerator _depthNode;
+        private DepthMetaData _depthMeta;
+        private SceneAnalyzer _sceneNode;
+        //private SceneMetaData _sceneMeta;
+        //private UserGenerator _userNode;
 
         private readonly FrameCounter _frameCounter = new FrameCounter();
         private readonly DepthHistogram _depthHist = new DepthHistogram();
@@ -113,10 +115,11 @@ namespace NiSimpleViewerWPF
                 // update image metadata
                 _imageNode.GetMetaData(_imageMeta);
                 _depthNode.GetMetaData(_depthMeta);
-                _sceneNode.GetMetaData(_sceneMeta);
+                //_sceneNode.GetLabelMapPtr();
+                //_userNode.GetUserPixels()
 
                 _depthHist.Update(_depthMeta);
-                _sceneMap.Update(_sceneMeta);
+                //_sceneMap.Update(_sceneMeta);
 
                 _frameCounter.AddFrame();
 
@@ -131,7 +134,7 @@ namespace NiSimpleViewerWPF
                         _depthHist.Paint(_depthMeta, _depthImageSource);
 
                         //CopyWritableBitmap(_sceneMeta, _sceneImageSource);
-                        _sceneMap.Paint(_sceneMeta, _sceneImageSource);
+                        _sceneMap.Paint(_sceneNode, _depthMeta, _sceneImageSource);
 
                         InvokeUpdateViewPort(EventArgs.Empty);
                      }, null);
@@ -143,12 +146,11 @@ namespace NiSimpleViewerWPF
 
         private void InitOpenNi(AsyncStateData asyncData)
         {
-            _niContext = new XnMOpenNIContextEx();
-            _niContext.InitFromXmlFile("openni.xml");
+            _niContext = new Context("openni.xml");
 
-            _imageNode = (XnMImageGenerator)_niContext.FindExistingNode(XnMProductionNodeType.Image);
+            _imageNode = (ImageGenerator)_niContext.FindExistingNode(NodeType.Image);
 
-            _imageMeta = new XnMImageMetaData();
+            _imageMeta = new ImageMetaData();
             _imageNode.GetMetaData(_imageMeta);
 
             // create the image bitmap source on 
@@ -157,9 +159,9 @@ namespace NiSimpleViewerWPF
                 null);
 
             // add depth node
-            _depthNode = (XnMDepthGenerator) _niContext.FindExistingNode(XnMProductionNodeType.Depth);
+            _depthNode = (DepthGenerator) _niContext.FindExistingNode(NodeType.Depth);
 
-            _depthMeta = new XnMDepthMetaData();
+            _depthMeta = new DepthMetaData();
             _depthNode.GetMetaData(_depthMeta);
 
             asyncData.AsyncOperation.SynchronizationContext.Send(
@@ -167,38 +169,36 @@ namespace NiSimpleViewerWPF
                 null);
 
             // add scene node
-            _sceneNode = (XnMSceneAnalyzer) _niContext.FindExistingNode(XnMProductionNodeType.Scene);
+            _sceneNode = (SceneAnalyzer) _niContext.FindExistingNode(NodeType.Scene);
 
-            _sceneMeta = new XnMSceneMetaData();
-            _sceneNode.GetMetaData(_sceneMeta);
+            //_sceneMeta = new SceneMetaData();
+            //_sceneNode.GetMetaData(_sceneMeta);
 
             asyncData.AsyncOperation.SynchronizationContext.Send(
-                state => CreateImageBitmap(_sceneMeta, out _sceneImageSource, PixelFormats.Pbgra32),
+                state => CreateImageBitmap(_depthMeta, out _sceneImageSource, PixelFormats.Pbgra32),
                 null);
         }
 
-        private static void CreateImageBitmap(XnMMapMetaData imageMd, out WriteableBitmap writeableBitmap, PixelFormat format)
+        private static void CreateImageBitmap(MapMetaData imageMd, out WriteableBitmap writeableBitmap, PixelFormat format)
         {
-            var bmpWidth = (int)imageMd.FullXRes;
-            var bmpHeight = (int)imageMd.FullYRes;
+            var bmpWidth = imageMd.FullXRes;
+            var bmpHeight = imageMd.FullYRes;
 
             writeableBitmap = new WriteableBitmap(bmpWidth, bmpHeight, 96.0, 96.0, format, null);
         }
 
-        private static void CreateImageBitmap(XnMMapMetaData imageMd, out WriteableBitmap writeableBitmap)
+        private static void CreateImageBitmap(MapMetaData imageMd, out WriteableBitmap writeableBitmap)
         {
             var format = MapPixelFormat(imageMd.PixelFormat);
             CreateImageBitmap(imageMd, out writeableBitmap, format);
         }
 
-        private static void CopyWritableBitmap(XnMMapMetaData imageMd, WriteableBitmap b)
+        private static void CopyWritableBitmap(ImageMetaData imageMd, WriteableBitmap b)
         {
             int dataSize = (int) imageMd.DataSize;
-            IntPtr data = imageMd.Data;
+            IntPtr data = imageMd.ImageMapPtr;
             
-            var rect = new Int32Rect((int) imageMd.XOffset, (int) imageMd.YOffset, 
-                (int) imageMd.XRes, (int) imageMd.YRes);
-
+            var rect = new Int32Rect(imageMd.XOffset, imageMd.YOffset, imageMd.XRes, imageMd.YRes);
             b.WritePixels(rect, data, dataSize, b.BackBufferStride);
 /*
             b.Lock();
@@ -260,18 +260,17 @@ namespace NiSimpleViewerWPF
         }
 */
 
-        private static PixelFormat MapPixelFormat(XnMPixelFormat xnMPixelFormat)
+        private static PixelFormat MapPixelFormat(xn.PixelFormat xnMPixelFormat)
         {
             switch (xnMPixelFormat)
             {
-                case XnMPixelFormat.Grayscale8Bit:
+                case xn.PixelFormat.Grayscale8Bit:
                     return PixelFormats.Gray8;
-                case XnMPixelFormat.Grayscale16Bit:
+                case xn.PixelFormat.Grayscale16Bit:
                     return PixelFormats.Gray16;
-                case XnMPixelFormat.Rgb24:
+                case xn.PixelFormat.RGB24:
                     return PixelFormats.Rgb24;
-
-                case XnMPixelFormat.Yuv422:
+                case xn.PixelFormat.YUV422:
                 default:
                     throw new NotSupportedException();
             }
