@@ -68,12 +68,20 @@ namespace SceneViewerWPF
         private DxScene _dxScene;
 
         private readonly List<UserModel> _users = new List<UserModel>();
+        private PlaneVisual3D _floorVisual;
+
         public MainWindow()
         {
             InitializeComponent();
 
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
+
+            _floorVisual = new PlaneVisual3D();
+            _floorVisual.Width = _floorVisual.Length = 10/KinectToHelixScale;
+            _floorVisual.BackMaterial = Materials.DarkGray;
+            _floorVisual.Material = (Material) FindResource("FloorMaterial");
+            _floorVisual.Transform = new MatrixTransform3D(GetKinectToHelixTransform().ToMatrix3D());
 
             cameraProps.SelectedCameraModeChanged += OnSelectedCameraModeChanged;
             renderProps.SelectedRenderTechChanged += OnSelectedRenderTechChanged;
@@ -127,8 +135,9 @@ namespace SceneViewerWPF
             if (_dxScene == null) return;
 
             var tracker = ((KinectTracker)sender);
+            var frame = tracker.CurrentFrame;
 
-            foreach (var user in tracker.CurrentFrame.Users)
+            foreach (var user in frame.Users)
             {
                 // update user model
                 var model = _users.FirstOrDefault(u => u.Id == user.Id);
@@ -141,13 +150,28 @@ namespace SceneViewerWPF
                     helixView.Children.Add(model.Model);
                 }
                 model.Update(user);
-                model.World = GetKinectToHelixMatix().ToMatrix3D();
+                model.World = GetKinectToHelixTransform().ToMatrix3D();
                 //TODO: remove not visible models
+            }
+
+            if (frame.Floor != null)
+            {
+                var plane = frame.Floor.Value;
+                _floorVisual.Origin = new Point3D(plane.ptPoint.X, -plane.ptPoint.Y, plane.ptPoint.Z);
+                _floorVisual.Normal = new Vector3D(plane.vNormal.X, -plane.vNormal.Y, plane.vNormal.Z);
+
+                if (!helixView.Children.Contains(_floorVisual))
+                    helixView.Children.Add(_floorVisual);
+            }
+            else
+            {
+                if (helixView.Children.Contains(_floorVisual))
+                    helixView.Children.Remove(_floorVisual);
             }
 
             if (freezeUpdates.IsChecked != true)
             {
-                _dxScene.PointsCloudRenderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
+                _dxScene.PointsCloudRenderer.Update(frame, tracker.CameraInfo);
             }
         }
 
@@ -267,9 +291,11 @@ namespace SceneViewerWPF
             UpdateRenderProperties();
         }
 
-        private SlimDX.Matrix GetKinectToHelixMatix()
+        const double KinectToHelixScale = 1.0 / 1000.0;
+
+        private static SlimDX.Matrix GetKinectToHelixTransform()
         {
-            var scale = 1/1000f;
+            var scale = (float)KinectToHelixScale;
             var world = SlimDX.Matrix.Scaling(scale, -scale, scale);
             world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
             world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
@@ -282,7 +308,7 @@ namespace SceneViewerWPF
             //if (renderProps.Scale != null)
             //    _dxScene.PointsCloud.Scale = renderProps.Scale.Value;
 
-            _dxScene.PointsCloud.World = GetKinectToHelixMatix();
+            _dxScene.PointsCloud.World = GetKinectToHelixTransform();
 
             _dxScene.PointsCloud.FillColor =
                 new Vector4(renderProps.FillColor.ScR,

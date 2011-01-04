@@ -6,6 +6,15 @@
         Title="MainWindow" Height="588" Width="1082"
         UseLayoutRounding="True">
     
+    <Window.Resources>
+        <DiffuseMaterial x:Key="FloorMaterial" >
+            <DiffuseMaterial.Brush>
+                <ImageBrush ImageSource="Assets/checkerboard.jpg" Opacity="0.5"/>
+            </DiffuseMaterial.Brush>
+        </DiffuseMaterial>
+
+    </Window.Resources>
+    
     <Grid Background="#FFCCCCCC">
     	<Grid.ColumnDefinitions>
     		<ColumnDefinition Width="*"/>

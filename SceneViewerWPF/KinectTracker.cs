@@ -154,11 +154,10 @@ namespace SceneViewerWPF
                     throw new InvalidOperationException("Image and depth map must have the same resolution");
 
                 // add scene node
-/*
                 _sceneNode = (SceneAnalyzer)_niContext.FindExistingNode(NodeType.Scene);
                 _sceneMeta = new SceneMetaData();
                 //_sceneNode.GetMetaData(_sceneMeta);
-*/
+
                 // add user generator
                 _userGenerator = _niContext.FindExistingNode(NodeType.User) as UserGenerator;
                 if (_userGenerator == null)
@@ -228,6 +227,18 @@ namespace SceneViewerWPF
 
             // copy depth data
             Marshal.Copy(_depthMeta.DepthMapPtr, _currentFrame.DepthMap, 0, depthSize);
+
+            try
+            {
+                Plane3D floor = new Plane3D();
+                //_sceneNode.
+                _sceneNode.GetFloor(ref floor);
+                _currentFrame.Floor = floor;
+            }
+            catch (XnStatusException)
+            {
+                _currentFrame.Floor = null;
+            }
 
             //TODO: the scene meta should be read from SceneAnalyzer instead of UserGenerator
             _sceneMeta = _userGenerator.GetUserPixels(0);
@@ -313,6 +324,7 @@ namespace SceneViewerWPF
         public byte[] ImageMap { get; set; }
         public short[] DepthMap { get; set; }
         public short[] SceneMap { get; set; }
+        public Plane3D? Floor { get; set; }
 
         public KinectUserCollection Users { get; private set; }
 
