@@ -7,17 +7,25 @@ namespace SceneViewerWPF
 {
     internal static class D3DExtensions
     {
+        public static Matrix3D ToMatrix3D(this SlimDX.Matrix m)
+        {
+            return new Matrix3D(m.M11, m.M12, m.M13, m.M14, 
+                                m.M21, m.M22, m.M23, m.M24, 
+                                m.M31, m.M32, m.M33, m.M34, 
+                                m.M41, m.M42, m.M43, m.M44);
+        }
+
         public static Vector4 ToVector4(this System.Windows.Media.Color thisColor)
         {
             return new Vector4(thisColor.ScR, thisColor.ScG, thisColor.ScB, thisColor.ScA);
         }
 
-        public static Vector3 ToVector3(this System.Windows.Media.Media3D.Vector3D thisVector)
+        public static Vector3 ToVector3(this Vector3D thisVector)
         {
             return new Vector3((float) thisVector.X, (float) thisVector.Y, (float) thisVector.Z);
         }
 
-        public static Vector3 ToVector3(this System.Windows.Media.Media3D.Point3D thisPoint)
+        public static Vector3 ToVector3(this Point3D thisPoint)
         {
             return new Vector3((float) thisPoint.X, (float) thisPoint.Y, (float) thisPoint.Z);
         }
@@ -27,7 +35,7 @@ namespace SceneViewerWPF
             return min + (float)random.NextDouble() * Math.Abs(max - min);
         }
 
-        public static void SetFromWpfCamera(this DxCamera thisCamera, System.Windows.Media.Media3D.PerspectiveCamera wpfCamera)
+        public static void SetFromWpfCamera(this DxCamera thisCamera, PerspectiveCamera wpfCamera)
         {
             thisCamera.At = (wpfCamera.Position + wpfCamera.LookDirection).ToVector3();
             thisCamera.Eye = wpfCamera.Position.ToVector3();

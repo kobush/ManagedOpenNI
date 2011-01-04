@@ -1,9 +1,9 @@
 ﻿using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Timers;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using HelixToolkit;
@@ -11,7 +11,6 @@ using NiSimpleViewerWPF;
 using SlimDX;
 using SlimDX.Windows;
 using Matrix = System.Windows.Media.Matrix;
-using Quaternion = SlimDX.Quaternion;
 
 namespace SceneViewerWPF
 {
@@ -20,12 +19,55 @@ namespace SceneViewerWPF
     /// </summary>
     public partial class MainWindow : Window
     {
+        private class UserModel
+        {
+            public ModelVisual3D Model { get; private set; }
+            private readonly SphereVisual3D _centerOfMass;
+
+            public Matrix3D World
+            {
+                get { return ((MatrixTransform3D) Model.Transform).Matrix; }
+                set { ((MatrixTransform3D) Model.Transform).Matrix = value; }
+            }
+
+            public int Id { get; private set; }
+            
+            public UserModel(int id)
+            {
+                Id = id;
+
+                var group = new ModelVisual3D();
+                group.Transform = new MatrixTransform3D();
+
+                _centerOfMass = new SphereVisual3D();
+                _centerOfMass.Center = new Point3D(0,0,0);
+                _centerOfMass.Material = Materials.Yellow;
+                _centerOfMass.Radius = 25; // about 5cm diameter
+                _centerOfMass.Transform = new TranslateTransform3D();
+
+                group.Children.Add(_centerOfMass);
+
+                Model = group;
+            }
+
+
+            public void Update(KinectUserInfo userInfo)
+            {
+                // TODO: optimize
+                var trans = ((TranslateTransform3D)_centerOfMass.Transform);
+                trans.OffsetX = userInfo.CenterOfMass.X;
+                trans.OffsetY = -userInfo.CenterOfMass.Y;
+                trans.OffsetZ = userInfo.CenterOfMass.Z;
+            }
+        }
+
         private KinectTracker _kinectTracker;
         private D3DImageSlimDX _dxImageContainer;
-        private Stopwatch _timer = new Stopwatch();
-        private FrameCounter _frameCounter = new FrameCounter();
+        private readonly Stopwatch _timer = new Stopwatch();
+        private readonly FrameCounter _frameCounter = new FrameCounter();
         private DxScene _dxScene;
 
+        private readonly List<UserModel> _users = new List<UserModel>();
         public MainWindow()
         {
             InitializeComponent();
@@ -84,9 +126,27 @@ namespace SceneViewerWPF
         {
             if (_dxScene == null) return;
 
+            var tracker = ((KinectTracker)sender);
+
+            foreach (var user in tracker.CurrentFrame.Users)
+            {
+                // update user model
+                var model = _users.FirstOrDefault(u => u.Id == user.Id);
+                if (model == null)
+                {
+                    model = new UserModel(user.Id);
+                    _users.Add(model);
+
+                    // show in view
+                    helixView.Children.Add(model.Model);
+                }
+                model.Update(user);
+                model.World = GetKinectToHelixMatix().ToMatrix3D();
+                //TODO: remove not visible models
+            }
+
             if (freezeUpdates.IsChecked != true)
             {
-                var tracker = ((KinectTracker)sender);
                 _dxScene.PointsCloudRenderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
             }
         }
@@ -207,17 +267,22 @@ namespace SceneViewerWPF
             UpdateRenderProperties();
         }
 
+        private SlimDX.Matrix GetKinectToHelixMatix()
+        {
+            var scale = 1/1000f;
+            var world = SlimDX.Matrix.Scaling(scale, -scale, scale);
+            world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
+            world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
+
+            return world;
+        }
+
         private void UpdateRenderProperties()
         {
             //if (renderProps.Scale != null)
             //    _dxScene.PointsCloud.Scale = renderProps.Scale.Value;
 
-            var scale = 1/1000f;
-            var world = SlimDX.Matrix.Scaling(scale, -scale, scale);
-            world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
-            world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
-            _dxScene.PointsCloud.World = world;
-
+            _dxScene.PointsCloud.World = GetKinectToHelixMatix();
 
             _dxScene.PointsCloud.FillColor =
                 new Vector4(renderProps.FillColor.ScR,
