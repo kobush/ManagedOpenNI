@@ -10,6 +10,7 @@ cbuffer cbPerFrame {
 	float4	gFillColor;
 	matrix	gViewProj;
 	matrix  gWorld;
+	uint	gUserLabel;
 };
 
 cbuffer cb0 {
@@ -22,6 +23,7 @@ cbuffer cb0 {
 Texture2D gImageMap;
 
 Buffer<uint> gDepthMap;
+Buffer<uint> gSceneMap;
 
 //--------------------------------------------------------------------------------------
 // Vertex Shader
@@ -53,27 +55,47 @@ bool InBounds(int x, int y)
 
 float4 ComputeVertexPosSizeW(int x, int y)
 {
-/*	smooth the surface (expensive op)
-	float depth = 0; float num = 0;
-	[loop] for (int m=x-1; m<=x+1;m++)
+	/*
+	//smooth the surface (expensive op)
+	float depth = 0; float sum = 0;
+	int num = 0;
+	[loop] for (int m=x-1; m <= x+1; m++)
 		[loop] for (int n=y-1; n<=y+1; n++)
 		{
 			// check if coordinates are in range
 			if (InBounds(m,n))
 			{
 				depth = gDepthMap.Load(gRes.x * n + m);
-				num += 1;
+				if (depth > 0)
+				{
+					num += 1;
+					sum += depth;
+				}
 			}
 		}
-	depth = depth / num;
-*/
-	// check if coordinates are in range
-	uint depth = 0;
-	if (InBounds(x,y))
-		depth = gDepthMap.Load(gRes.x * y + x);
-	
-	[branch] if (depth == 0)
+		 
+	[branch] 
+	if (num == 0)
 	{
+		return float4(0,0,0,0);
+	}
+	else 
+	{
+		depth = sum / num;
+		*/
+
+	uint depth = 0;
+	uint label = 0;
+	if (InBounds(x,y))
+	{
+		int ptr = gRes.x * y + x;
+		depth = gDepthMap.Load(ptr);
+		label = gSceneMap.Load(ptr);
+	}
+
+	[branch] if (depth == 0 || label != gUserLabel)
+	{
+		// ignore this point
 		return float4(0,0,0,0);
 	}
 	else 
@@ -99,25 +121,40 @@ float3 ComputeFaceNormal(float3 p0, float3 p1, float3 p2)
 
 VS_OUT VS(VS_IN vIn)
 {
+	VS_OUT vOut;
+
 	float u = vIn.pos.x;
 	float v = vIn.pos.y;
 	float4 v0 = ComputeVertexPosSizeW(u, v);
 
-	VS_OUT vOut;
+	[branch]
+	if (v0.z == 0)
+	{
+		vOut.posW = float3(0,0,0);
+		vOut.posH = float4(0,0,0,0);
+		vOut.sizeW = 0;
+		vOut.normalW = float3(0,0,0);
+		vOut.texC = float2(0,0);
+	}
+
+	// world transform
 	vOut.posW =  mul(float4(v0.xyz, 1.0), gWorld).xyz;
+	// view projection transform
 	vOut.posH = mul(float4(vOut.posW, 1.0f), gViewProj);
+	// transformed size
 	vOut.sizeW = mul(float4(v0.w, 0.0, 0.0, 1.0), gWorld).x;
 	
 	// transform to RGB camera space
 	float4 pos = mul(float4(v0.xyz, 1.0), gDepthToRgb);
 
-	// transform to image frame
+	// transform back to image frame
 	u = pos.x * (gFocalLengthImage / pos.z) + (gRes.x / 2.0);
 	v = pos.y * (gFocalLengthImage / pos.z) + (gRes.y / 2.0);
 
-	vOut.texC = float2(u / gRes.x, v / gRes.y);
+	// set texture coordinates
+	vOut.texC = float2((u+0.5) / gRes.x, (v + 0.5) / gRes.y);
 
-	// don't bother with normal if lighting is not used
+	// don't bother with calculating normals if lighting is not used
 	[branch]
 	if (gLight.type == 0) 
 	{
@@ -139,7 +176,6 @@ VS_OUT VS(VS_IN vIn)
 
 		float3 normal = float3(0,0,0);
 	
-
 		int o = 1;
 		float4 v1 = ComputeVertexPosSizeW(vIn.pos.x - o, vIn.pos.y);
 		float4 v2 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y + o);
@@ -198,7 +234,9 @@ void GS(triangle VS_OUT gIn[3], inout TriangleStream<GS_OUT> triStream)
 	
 	[branch]
 	if (d1 > avgSize || d2 > avgSize || d3 > avgSize)
-		return;
+		return; 
+
+	//float3 normal = ComputeFaceNormal(gIn[0].posW, gIn[1].posW, gIn[2].posW);
 
 	// output new face
 	[unroll]

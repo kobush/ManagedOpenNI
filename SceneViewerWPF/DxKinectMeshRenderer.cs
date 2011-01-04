@@ -42,6 +42,10 @@ namespace SceneViewerWPF
         private ShaderResourceView _depthMapBufferRV;
         private EffectResourceVariable _depthMapVar;
 
+        private Buffer _sceneMapBuffer;
+        private ShaderResourceView _sceneMapBufferRV;
+        private EffectResourceVariable _sceneMapVar;
+
         private float _vertexScale = 0.1f; // Scale from mm to cm!
 
         private float _focalLengthDepth;
@@ -56,9 +60,9 @@ namespace SceneViewerWPF
 
         private DxLight _light;
         private EffectVariable _lightVariable;
-        private bool _headlight;
         private Vector4 _fillColor;
         private EffectVectorVariable _fillColorVar;
+
 
         [StructLayout(LayoutKind.Sequential)]
         public struct PointVertex
@@ -100,6 +104,7 @@ namespace SceneViewerWPF
 
             _imageMapVar = _effect.GetVariableByName("gImageMap").AsResource();
             _depthMapVar = _effect.GetVariableByName("gDepthMap").AsResource();
+            _sceneMapVar = _effect.GetVariableByName("gSceneMap").AsResource();
 
             _resVar = _effect.GetVariableByName("gRes").AsVector();
             _depthToRgbVar = _effect.GetVariableByName("gDepthToRgb").AsMatrix();
@@ -180,13 +185,13 @@ namespace SceneViewerWPF
                 {
                     // first triangle
                     indexStream.Write(y*_xRes + x);
-                    indexStream.Write((y+1)*_xRes + x);
                     indexStream.Write(y * _xRes + x + 1);
+                    indexStream.Write((y + 1) * _xRes + x);
 
                     // second triangle
                     indexStream.Write((y + 1)*_xRes + x);
-                    indexStream.Write((y + 1)*_xRes + x + 1);
                     indexStream.Write(y * _xRes + x + 1);
+                    indexStream.Write((y + 1) * _xRes + x + 1);
                 }
             }
 
@@ -222,10 +227,23 @@ namespace SceneViewerWPF
 
 
             // depth map buffer
-            _depthMapBuffer = new Buffer(_dxDevice, _vertexCount * sizeof(UInt16), ResourceUsage.Dynamic,
+            _depthMapBuffer = new Buffer(_dxDevice, _vertexCount * sizeof(ushort), ResourceUsage.Dynamic,
                                          BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
 
             _depthMapBufferRV = new ShaderResourceView(_dxDevice, _depthMapBuffer,
+                                                       new ShaderResourceViewDescription
+                                                           {
+                                                               Dimension = ShaderResourceViewDimension.Buffer,
+                                                               Format = Format.R16_UInt,
+                                                               ElementOffset = 0,
+                                                               ElementWidth = _vertexCount,
+                                                           });
+
+            // scene map buffer
+            _sceneMapBuffer = new Buffer(_dxDevice, _vertexCount * sizeof(ushort), ResourceUsage.Dynamic,
+                                         BindFlags.ShaderResource, CpuAccessFlags.Write, ResourceOptionFlags.None);
+
+            _sceneMapBufferRV = new ShaderResourceView(_dxDevice, _sceneMapBuffer,
                                                        new ShaderResourceViewDescription
                                                            {
                                                                Dimension = ShaderResourceViewDimension.Buffer,
@@ -268,10 +286,63 @@ namespace SceneViewerWPF
             // update depth map
             if (_depthMapBuffer != null)
             {
-                DataStream depthStream = _depthMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None);
-                depthStream.WriteRange(frame.DepthMap);
-                _depthMapBuffer.Unmap();
+                using (DataStream depthStream = _depthMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None))
+                {
+                    depthStream.WriteRange(frame.DepthMap);
+                    _depthMapBuffer.Unmap();
+                }
+
+/*                var depthMap = frame.DepthMap;
+
+                for (int v = 0; v < _yRes; v++)
+                {
+                    for (int u = 0; u < _xRes; u++)
+                    {
+                        float depth = GetAvgDepth(v, u, depthMap);
+                        depthStream.Write(depth);
+                    }
+                }
+ */
+
+                
             }
+
+            // update scene map
+            if (_sceneMapBuffer != null)
+            {
+                using (DataStream sceneStream = _sceneMapBuffer.Map(MapMode.WriteDiscard, MapFlags.None))
+                {
+                    sceneStream.WriteRange(frame.SceneMap);
+                    _sceneMapBuffer.Unmap();
+                }
+            }
+        }
+
+        private float GetAvgDepth(int v, int u, short[] depthMap)
+        {
+            var sum = 0f; var num = 0;
+
+            for (int y = v-1; y <= v+1; y++)
+            {
+                for (int x = u-1; x < u+1; x++)
+                {
+                    // is point in bounds
+                    if (y < 0 || y >= _yRes || x < 0 || x >= _xRes) 
+                        continue;
+
+                    var d = depthMap[y*_xRes + x];
+                    if (d > 0)
+                    {
+                        sum += d;
+                        num++;
+                    }
+                }
+            }
+
+            if (num > 0) 
+                return sum/ (float)num;
+            
+            return 0f;
         }
 
         public float Scale
@@ -312,14 +383,10 @@ namespace SceneViewerWPF
             _focalLengthImageVar.Set(_focalLengthImage);
             _depthToRgbVar.SetMatrix(_depthToRgb);
 
-            if (_headlight)
-            {
-                _light.Position = camera.Eye;
-                _light.Direction = camera.At - camera.Eye;
-            }
             _light.SetEffectVariable(_lightVariable);
 
             _depthMapVar.SetResource(_depthMapBufferRV);
+            _sceneMapVar.SetResource(_sceneMapBufferRV);
             _imageMapVar.SetResource(_imageTextureRV);
 
             _dxDevice.InputAssembler.SetInputLayout(_inputLayout);
@@ -358,6 +425,18 @@ namespace SceneViewerWPF
             {
                 _depthMapBufferRV.Dispose();
                 _depthMapBufferRV = null;
+            }
+            
+            if (_sceneMapBuffer != null)
+            {
+                _sceneMapBuffer.Dispose();
+                _sceneMapBuffer = null;
+            }
+
+            if (_sceneMapBufferRV != null)
+            {
+                _sceneMapBufferRV.Dispose();
+                _sceneMapBufferRV = null;
             }
 
             if (_imageTexture != null)

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Linq;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -7,7 +9,7 @@ using xn;
 
 namespace SceneViewerWPF
 {
-    class KinectTracker
+    public class KinectTracker : IDisposable
     {
         private Context _niContext;
         private ImageGenerator _imageNode;
@@ -21,6 +23,7 @@ namespace SceneViewerWPF
         private KinectFrame _currentFrame;
 
         private KinectCameraInfo _cameraInfo;
+        private UserGenerator _userGenerator;
 
         public KinectCameraInfo CameraInfo
         {
@@ -112,6 +115,12 @@ namespace SceneViewerWPF
 
                 }
             }
+
+            _userGenerator.StopGenerating();
+            
+            //TODO: this call causes exception in Dispose
+            //_niContext.Shutdown();
+
             asyncData.Running = false;
             asyncData.AsyncOperation.PostOperationCompleted(evt => InvokeTrackinkgCompleted(EventArgs.Empty), null);
 
@@ -131,7 +140,11 @@ namespace SceneViewerWPF
                     throw new InvalidOperationException("Only RGB24 pixel format is supported");
 
                 // add depth node
-                _depthNode = (DepthGenerator)_niContext.FindExistingNode(NodeType.Depth);
+                _depthNode = _niContext.FindExistingNode(NodeType.Depth) as DepthGenerator;
+                if (_depthNode == null)
+                {
+                    throw new InvalidOperationException("Viewer must have a depth node!");
+                }
                 _depthMeta = new DepthMetaData();
                 _depthNode.GetMetaData(_depthMeta);
 
@@ -142,10 +155,18 @@ namespace SceneViewerWPF
                     throw new InvalidOperationException("Image and depth map must have the same resolution");
 
                 // add scene node
+/*
                 _sceneNode = (SceneAnalyzer)_niContext.FindExistingNode(NodeType.Scene);
                 _sceneMeta = new SceneMetaData();
                 //_sceneNode.GetMetaData(_sceneMeta);
+*/
+                // add user generator
+                _userGenerator = new UserGenerator(_niContext);
+                _userGenerator.NewUser += UserGenerator_NewUser;
+                _userGenerator.LostUser += UserGenerator_LostUser;
+                //_userGenerator.StartGenerating();
 
+                // initialize buffers
                 asyncData.AsyncOperation.SynchronizationContext.Send(
                     delegate
                     {
@@ -153,6 +174,8 @@ namespace SceneViewerWPF
                         UpdateFrameData();
                         InvokeTrackinkgStarted(EventArgs.Empty);
                     }, null);
+
+                _niContext.StartGeneratingAll();
 
                 return true;
             }
@@ -162,14 +185,31 @@ namespace SceneViewerWPF
             }
         }
 
+        void UserGenerator_LostUser(ProductionNode node, uint id)
+        {
+            Debug.Print("User lost {0}", id);
+
+            EnsureFrame();
+
+            CurrentFrame.Users.Remove((int)id);
+        }
+
+        void UserGenerator_NewUser(ProductionNode node, uint id)
+        {
+            Debug.Print("User found {0}", id);
+
+            EnsureFrame();
+
+            CurrentFrame.Users.Add(new KinectUserInfo { Id = (int) id});
+        }
+
         private void UpdateFrameData()
         {
-            if (_currentFrame == null)
-                _currentFrame = new KinectFrame();
+            EnsureFrame();
 
-            _currentFrame.FrameId = (int)_imageMeta.FrameID;
+            _currentFrame.FrameId = (int) _imageMeta.FrameID;
 
-            int imageSize = _imageMeta.XRes * _imageMeta.YRes * 3;
+            int imageSize = _imageMeta.XRes*_imageMeta.YRes*3;
             Debug.Assert(imageSize == _imageMeta.DataSize);
 
             if (_currentFrame.ImageMap == null || _currentFrame.ImageMap.Length != imageSize)
@@ -178,14 +218,41 @@ namespace SceneViewerWPF
             // copy image data
             Marshal.Copy(_imageMeta.ImageMapPtr, _currentFrame.ImageMap, 0, imageSize);
 
-            int depthSize = _depthMeta.XRes * _depthMeta.YRes;
-            Debug.Assert(depthSize * sizeof(ushort) == _depthMeta.DataSize);
+            int depthSize = _depthMeta.XRes*_depthMeta.YRes;
+            Debug.Assert(depthSize*sizeof (ushort) == _depthMeta.DataSize);
 
             if (_currentFrame.DepthMap == null || _currentFrame.DepthMap.Length != depthSize)
                 _currentFrame.DepthMap = new short[depthSize];
 
             // copy depth data
             Marshal.Copy(_depthMeta.DepthMapPtr, _currentFrame.DepthMap, 0, depthSize);
+
+            //TODO: the scene meta should be read from SceneAnalyzer instead of UserGenerator
+            _sceneMeta = _userGenerator.GetUserPixels(0);
+            int sceneSize = _sceneMeta.XRes*_sceneMeta.YRes;
+            Debug.Assert(sceneSize*sizeof (ushort) == _sceneMeta.DataSize);
+
+            if (_currentFrame.SceneMap == null || _currentFrame.SceneMap.Length != sceneSize)
+                _currentFrame.SceneMap = new short[sceneSize];
+
+            // copy scene data (user labels)
+            Marshal.Copy(_sceneMeta.SceneMapPtr, _currentFrame.SceneMap, 0, sceneSize);
+
+            var userIds = _userGenerator.GetUsers();
+            foreach (var user in CurrentFrame.Users)
+            {
+                Debug.Assert(userIds.Contains((uint)user.Id));
+
+                user.CenterOfMass = _userGenerator.GetCoM((uint) user.Id);
+            }
+        }
+
+        private void EnsureFrame()
+        {
+            if (_currentFrame == null)
+            {
+                _currentFrame = new KinectFrame();
+            }
         }
 
         private void UpdateCameraInfo()
@@ -227,14 +294,49 @@ namespace SceneViewerWPF
                                          };
 */
         }
+
+        public void Dispose()
+        {
+            StopTracking();
+
+            if (_userGenerator != null)
+                _userGenerator.Dispose();
+
+            if (_niContext != null)
+                _niContext.Dispose();
+        }
     }
 
-        public class KinectFrame
+    public class KinectFrame
     {
         public int FrameId { get; set; }
 
         public byte[] ImageMap { get; set; }
         public short[] DepthMap { get; set; }
+        public short[] SceneMap { get; set; }
+
+        public KinectUserCollection Users { get; private set; }
+
+        public KinectFrame()
+        {
+            Users = new KinectUserCollection();
+        }
+    }
+
+    public class KinectUserInfo
+    {
+        public int Id { get; set; }
+        public bool IsTracking { get; set; }
+        public bool IsCalibrating { get; set; }
+        public Point3D CenterOfMass { get; set; }
+    }
+
+    public class KinectUserCollection : KeyedCollection<int,KinectUserInfo>
+    {
+        protected override int GetKeyForItem(KinectUserInfo item)
+        {
+            return item.Id;
+        }
     }
 
     public class KinectCameraInfo
