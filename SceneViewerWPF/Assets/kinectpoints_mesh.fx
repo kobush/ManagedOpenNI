@@ -159,15 +159,17 @@ VS_OUT VS(VS_IN vIn)
 	}
 
 	// world transform
-	vOut.posW =  mul(float4(v0.xyz, 1.0), gWorld).xyz;
+	vOut.posW =  mul(v0.xyz, gWorld);
 	// view projection transform
-	vOut.posH = mul(float4(vOut.posW, 1.0f), gViewProj);
-	// transformed size
-	vOut.sizeW = mul(float4(v0.w, 0.0, 0.0, 1.0), gWorld).x;
-	// vertex alpha
+	vOut.posH = mul(float4(vOut.posW, 1.0), gViewProj);
+	
+	// scale pixelSize to world space
+	vOut.sizeW = length(mul(float4(v0.w,0,0,0), gWorld));
+
+	// vertex alpha (from user label map)
 	vOut.alpha = ComputerVertexAlpha(vIn.pos);
 
-	// transform to RGB camera space
+	// transform pos to RGB camera space
 	float4 pos = mul(float4(v0.xyz, 1.0), gDepthToRgb);
 
 	// transform back to image frame

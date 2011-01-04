@@ -88,22 +88,8 @@ namespace SceneViewerWPF
         {
             _dxDevice = dxDevice;
 
-            Scale = 0.1f;
-            UserAlpha = 1f;
-            BackgroundAlpha = 0.5f;
-
             LoadEffect(@"Assets\kinectpoints_mesh.fx");
         }
-
-        public float Scale { get; set; }
-
-        public Vector4 FillColor { get; set; }
-
-        public DxLight Light { get; set; }
-
-        public float BackgroundAlpha { get; set; }
-
-        public float UserAlpha { get; set; }
 
         private void LoadEffect(string shaderFileName)
         {
@@ -151,19 +137,6 @@ namespace SceneViewerWPF
             CreateVertexBuffer();
             CreateIndexBuffer();
             CreateTextures();
-
-            Light = new DxLight
-            {
-                Type = DxLightType.None,
-                Position = new Vector3(0, 0, 0f),
-                Direction = new Vector3(0, 0, 1),
-                Ambient = new Vector4(0.4f, 0.4f, 0.4f, 1.0f),
-                Diffuse = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-                Specular = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
-                Attenuation = new Vector3(0.0f, 0.005f, 0.0f),
-                SpotPower = 0.001f,
-                Range = 1000f
-            };
         }
 
         private void CreateVertexBuffer()
@@ -369,25 +342,28 @@ namespace SceneViewerWPF
             // ignore
         }
 
-        public void Render(DxCamera camera)
+        public void Render(DxKinectPointsCloud pc, DxCamera camera)
         {
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
-            // set variables
-            _worldVar.SetMatrix(Matrix.Scaling(Scale, -Scale, Scale));
+            // set camera variables
             _eyePosWVar.Set(camera.Eye);
             _viewProjVar.SetMatrix(camera.View*camera.Projection);
-            _fillColorVar.Set(FillColor);
-            _userAlphaVar.Set(UserAlpha);
-            _backAlphaVar.Set(BackgroundAlpha);
+            
+            // set instance variables
+            _worldVar.SetMatrix(pc.World);
+            _fillColorVar.Set(pc.FillColor);
+            _userAlphaVar.Set(pc.UserAlpha);
+            _backAlphaVar.Set(pc.BackgroundAlpha);
+            
+            // set light
+            pc.Light.SetEffectVariable(_lightVariable);
 
             _resVar.Set(new Vector2(_xRes, _yRes));
             _focalLengthDepthVar.Set(_focalLengthDepth);
             _focalLengthImageVar.Set(_focalLengthImage);
             _depthToRgbVar.SetMatrix(_depthToRgb);
-
-            Light.SetEffectVariable(_lightVariable);
 
             _depthMapVar.SetResource(_depthMapBufferRV);
             _sceneMapVar.SetResource(_sceneMapBufferRV);

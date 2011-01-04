@@ -142,9 +142,8 @@ namespace SceneViewerWPF
                 // add depth node
                 _depthNode = _niContext.FindExistingNode(NodeType.Depth) as DepthGenerator;
                 if (_depthNode == null)
-                {
                     throw new InvalidOperationException("Viewer must have a depth node!");
-                }
+
                 _depthMeta = new DepthMetaData();
                 _depthNode.GetMetaData(_depthMeta);
 
@@ -161,7 +160,10 @@ namespace SceneViewerWPF
                 //_sceneNode.GetMetaData(_sceneMeta);
 */
                 // add user generator
-                _userGenerator = new UserGenerator(_niContext);
+                _userGenerator = _niContext.FindExistingNode(NodeType.User) as UserGenerator;
+                if (_userGenerator == null)
+                    throw new InvalidOperationException("Viewer must have an user node!");
+
                 _userGenerator.NewUser += UserGenerator_NewUser;
                 _userGenerator.LostUser += UserGenerator_LostUser;
                 //_userGenerator.StartGenerating();
@@ -298,9 +300,6 @@ namespace SceneViewerWPF
         public void Dispose()
         {
             StopTracking();
-
-            if (_userGenerator != null)
-                _userGenerator.Dispose();
 
             if (_niContext != null)
                 _niContext.Dispose();

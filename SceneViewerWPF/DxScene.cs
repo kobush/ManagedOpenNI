@@ -20,7 +20,9 @@ namespace SceneViewerWPF
         private Font _dxFont;
         //private DxEffect _dxEffect;
         private DxCube _dxCube;
-        private IKinectPointsCloudRenderer _kinectPoints;
+
+        private IKinectPointsCloudRenderer _kinectPointsRenderer;
+        private DxKinectPointsCloud _kinectPoints = new DxKinectPointsCloud();
 
         private DxParticleSystemRenderer _fire;
         private DxTextureManager _textureManager;
@@ -92,29 +94,27 @@ namespace SceneViewerWPF
 
         public IKinectPointsCloudRenderer PointsCloudRenderer
         {
+            get { return _kinectPointsRenderer; }
+        }
+
+        public DxKinectPointsCloud PointsCloud
+        {
             get { return _kinectPoints; }
         }
 
         public void CrateKinectPointsRenderer(KinectPointsRendererType rendererType)
         {
-            var oldRenderer = _kinectPoints;
+            var oldRenderer = _kinectPointsRenderer;
 
             // create new renderer
             if (rendererType == KinectPointsRendererType.Billboard)
-                _kinectPoints = new DxKinectPointsCloudRenderer(_dxDevice);
+                _kinectPointsRenderer = new DxKinectPointsCloudRenderer(_dxDevice);
             else if (rendererType == KinectPointsRendererType.Mesh)
-                _kinectPoints = new DxKinectMeshRenderer(_dxDevice);
+                _kinectPointsRenderer = new DxKinectMeshRenderer(_dxDevice);
 
             // destroy old renderer
             if (oldRenderer != null)
             {
-                // copy settings
-                _kinectPoints.Scale = oldRenderer.Scale;
-                _kinectPoints.UserAlpha = oldRenderer.UserAlpha;
-                _kinectPoints.BackgroundAlpha = oldRenderer.BackgroundAlpha;
-                _kinectPoints.FillColor = oldRenderer.FillColor;
-                _kinectPoints.Light = oldRenderer.Light;
-
                 oldRenderer.Dispose();
             }
         }
@@ -219,7 +219,7 @@ namespace SceneViewerWPF
             _textureManager.Dispose();
             _dxCube.Dispose();
             //_dxEffect.Dispose();
-            _kinectPoints.Dispose();
+            _kinectPointsRenderer.Dispose();
 
 
             if (_dxFont != null)
@@ -270,8 +270,8 @@ namespace SceneViewerWPF
             BeginScene();
             Camera.Update(ClientWidth, ClientHeight);
 
-            _kinectPoints.Update(dt, gameTime);
-            _kinectPoints.Render(Camera);
+            _kinectPointsRenderer.Update(dt, gameTime);
+            _kinectPointsRenderer.Render(_kinectPoints, Camera);
 
 /*
             _fire.Update(dt, gameTime);
@@ -311,7 +311,7 @@ namespace SceneViewerWPF
             var rsd = new RasterizerStateDescription
             {
                 //IsAntialiasedLineEnabled = true,
-                IsFrontCounterclockwise = false,
+                IsFrontCounterclockwise = true,
                 CullMode = CullMode.None,
                 FillMode = (_wireframe) ? FillMode.Wireframe : FillMode.Solid
             };

@@ -10,6 +10,8 @@ using HelixToolkit;
 using NiSimpleViewerWPF;
 using SlimDX;
 using SlimDX.Windows;
+using Matrix = System.Windows.Media.Matrix;
+using Quaternion = SlimDX.Quaternion;
 
 namespace SceneViewerWPF
 {
@@ -49,16 +51,16 @@ namespace SceneViewerWPF
             _dxScene = new DxScene();
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
 
-            renderProps.Scale = _dxScene.PointsCloudRenderer.Scale;
-
-            // init camera
-            helixView.Camera.Position = new Point3D(0,25,-100);
-            helixView.Camera.LookDirection = new Point3D(0, 0, 100) - helixView.Camera.Position;
-            helixView.Camera.UpDirection = new Vector3D(0,1,0);
-            helixView.Camera.FarPlaneDistance = 2000; // this is about 20 meters
+            // position camera 1m and slightly above kinect
+            helixView.Camera.Position = new Point3D(1, 0, 0.25);
+            // look at point 1m in front camera
+            helixView.Camera.LookDirection = new Point3D(-1, 0, 0) - helixView.Camera.Position;
+            // set 1km depth of view
+            helixView.Camera.FarPlaneDistance = 1000;  
             helixView.CameraChanged += delegate { UpdateCameraPosition(); };
             UpdateCameraPosition();
 
+            UpdateRenderProperties();
             BeginRenderingScene();
 
             // setup tracker
@@ -202,24 +204,36 @@ namespace SceneViewerWPF
 
         private void OnRendererPropertyChanged(object sender, EventArgs e)
         {
-            if (renderProps.Scale != null)
-                _dxScene.PointsCloudRenderer.Scale = renderProps.Scale.Value;
+            UpdateRenderProperties();
+        }
 
-            _dxScene.PointsCloudRenderer.FillColor =
+        private void UpdateRenderProperties()
+        {
+            //if (renderProps.Scale != null)
+            //    _dxScene.PointsCloud.Scale = renderProps.Scale.Value;
+
+            var scale = 1/1000f;
+            var world = SlimDX.Matrix.Scaling(scale, -scale, scale);
+            world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
+            world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
+            _dxScene.PointsCloud.World = world;
+
+
+            _dxScene.PointsCloud.FillColor =
                 new Vector4(renderProps.FillColor.ScR,
                             renderProps.FillColor.ScG,
                             renderProps.FillColor.ScB,
                             (float) (1.0 - renderProps.TextureAlpha));
 
-            _dxScene.PointsCloudRenderer.UserAlpha = (float) renderProps.UserAlpha;
-            _dxScene.PointsCloudRenderer.BackgroundAlpha = (float) renderProps.BackgroundAlpha;
+            _dxScene.PointsCloud.UserAlpha = (float) renderProps.UserAlpha;
+            _dxScene.PointsCloud.BackgroundAlpha = (float) renderProps.BackgroundAlpha;
         }
 
         private void OnLightPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
         {
             if (_dxScene != null)
             {
-                _dxScene.PointsCloudRenderer.Light = lightProps.ViewModel.GetLight();
+                _dxScene.PointsCloud.Light = lightProps.ViewModel.GetLight();
             }
         }
     }

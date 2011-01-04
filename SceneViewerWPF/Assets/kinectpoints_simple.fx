@@ -57,7 +57,8 @@ VS_OUT VS(VS_IN vIn)
 	
 	// transform to world 
 	vOut.centerW = mul(pos, gWorld).xyz; 
-	vOut.sizeW = mul(float4(pixelSize *1.2, pixelSize*1.2, 0, 0), gWorld).xy;
+	vOut.sizeW.x = length(mul(float4(pixelSize * 1.2, 0, 0, 0), gWorld));
+	vOut.sizeW.y = length(mul(float4(0, pixelSize * 1.2, 0, 0), gWorld));
 
 	//float4 uvd1 = float4(pos.xyz, 1);
 	//float3 uvw = mul(uvd1, gDepthToRgb).xyz;

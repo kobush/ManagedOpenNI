@@ -48,6 +48,15 @@ namespace SceneViewerWPF
             return angle*(180.0/Math.PI);
         }
 
+        public static float DegreeToRadian(this float angle)
+        {
+            return (float)Math.PI * angle / 180.0f;
+        }
+
+        public static float RadianToDegree(this float angle)
+        {
+            return angle * (180.0f / (float)Math.PI);
+        }
         public static string Format(this Point3D pt, string format="F3")
         {
             var sb = new StringBuilder();

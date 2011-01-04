@@ -10,25 +10,52 @@ using MapFlags = SlimDX.Direct3D10.MapFlags;
 
 namespace SceneViewerWPF
 {
+    public interface IRenderer<in T> : IDisposable 
+        where T : class
+    {
+        void Update(float dt, float time);
+        void Render(T obj, DxCamera camera);
+    }
 
-    public interface IKinectPointsCloudRenderer : IRenderer
+    public class DxKinectPointsCloud
+    {
+        public DxKinectPointsCloud()
+        {
+            World = Matrix.Identity;
+            UserAlpha = 1f;
+            BackgroundAlpha = 0.5f;
+
+            // default light
+            Light = new DxLight
+            {
+                Type = DxLightType.None,
+                Position = new Vector3(0, 0, 0f),
+                Direction = new Vector3(0, 0, 1),
+                Ambient = new Vector4(0.4f, 0.4f, 0.4f, 1.0f),
+                Diffuse = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+                Specular = new Vector4(1.0f, 1.0f, 1.0f, 1.0f),
+                Attenuation = new Vector3(0.0f, 0.005f, 0.0f),
+                SpotPower = 0.001f,
+                Range = 1000f
+            };
+        }
+
+        public Vector4 FillColor { get; set; }
+
+        public DxLight Light { get; set; }
+
+        public float BackgroundAlpha { get; set; }
+
+        public float UserAlpha { get; set; }
+
+        public Matrix World { get; set; }
+    }
+
+    public interface IKinectPointsCloudRenderer : IRenderer<DxKinectPointsCloud>
     {
         void Init(KinectFrame frame, KinectCameraInfo cameraInfo);
         void Update(KinectFrame frame, KinectCameraInfo cameraInfo);
-
-        float Scale { get; set; }
-        Vector4 FillColor { get; set; }
-        DxLight Light { get; set; }
-        float BackgroundAlpha { get; set; }
-        float UserAlpha { get; set; }
     }
-
-    public interface IRenderer : IDisposable
-    {
-        void Update(float dt, float time);
-        void Render(DxCamera camera);
-    }
-
 
     public enum KinectPointsRendererType
     {
@@ -93,19 +120,9 @@ namespace SceneViewerWPF
             }
         }
 
-        public float Scale { get; set; }
-
-        public Vector4 FillColor { get; set; }
-
-        public DxLight Light { get; set; }
-
-        public float BackgroundAlpha { get; set; }
-
-        public float UserAlpha { get; set; }
 
         public DxKinectPointsCloudRenderer(Device dxDevice)
         {
-            Scale = 0.1f;
             _dxDevice = dxDevice;
 
             LoadEffect(@"Assets\kinectpoints_simple.fx");
@@ -251,15 +268,16 @@ namespace SceneViewerWPF
             // ignore
         }
 
-        public void Render(DxCamera camera)
+        public void Render(DxKinectPointsCloud pc, DxCamera camera)
         {
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
-            _worldVar.SetMatrix(Matrix.Scaling(Scale, -Scale, Scale));
             _eyePosWVar.Set(camera.Eye);
             _viewProjVar.SetMatrix(camera.View*camera.Projection);
-            _fillColorVar.Set(FillColor);
+
+            _worldVar.SetMatrix(pc.World);
+            _fillColorVar.Set(pc.FillColor);
 
             _resVar.Set(new Vector2(_xRes, _yRes));
             _focalLengthDepthVar.Set(_focalLengthDepth);
