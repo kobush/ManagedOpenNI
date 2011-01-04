@@ -12,6 +12,8 @@ namespace SceneViewerWPF
 {
     public class DxKinectMeshRenderer : IKinectPointsCloudRenderer
     {
+        #region Private fields
+
         private readonly Device _dxDevice;
 
         // indicates if renderer was already initialized from source fame
@@ -46,8 +48,6 @@ namespace SceneViewerWPF
         private ShaderResourceView _sceneMapBufferRV;
         private EffectResourceVariable _sceneMapVar;
 
-        private float _vertexScale = 0.1f; // Scale from mm to cm!
-
         private float _focalLengthDepth;
         private float _focalLengthImage;
 
@@ -58,10 +58,12 @@ namespace SceneViewerWPF
         private Matrix _depthToRgb;
         private EffectMatrixVariable _depthToRgbVar;
 
-        private DxLight _light;
         private EffectVariable _lightVariable;
-        private Vector4 _fillColor;
         private EffectVectorVariable _fillColorVar;
+        private EffectScalarVariable _userAlphaVar;
+        private EffectScalarVariable _backAlphaVar;
+
+        #endregion
 
 
         [StructLayout(LayoutKind.Sequential)]
@@ -86,8 +88,22 @@ namespace SceneViewerWPF
         {
             _dxDevice = dxDevice;
 
+            Scale = 0.1f;
+            UserAlpha = 1f;
+            BackgroundAlpha = 0.5f;
+
             LoadEffect(@"Assets\kinectpoints_mesh.fx");
         }
+
+        public float Scale { get; set; }
+
+        public Vector4 FillColor { get; set; }
+
+        public DxLight Light { get; set; }
+
+        public float BackgroundAlpha { get; set; }
+
+        public float UserAlpha { get; set; }
 
         private void LoadEffect(string shaderFileName)
         {
@@ -99,8 +115,11 @@ namespace SceneViewerWPF
             _eyePosWVar = _effect.GetVariableByName("gEyePosW").AsVector();
             _viewProjVar = _effect.GetVariableByName("gViewProj").AsMatrix();
             _worldVar = _effect.GetVariableByName("gWorld").AsMatrix();
+            
             _fillColorVar = _effect.GetVariableByName("gFillColor").AsVector();
             _lightVariable = _effect.GetVariableByName("gLight");
+            _userAlphaVar = _effect.GetVariableByName("gUserAlpha").AsScalar();
+            _backAlphaVar = _effect.GetVariableByName("gBackAlpha").AsScalar();
 
             _imageMapVar = _effect.GetVariableByName("gImageMap").AsResource();
             _depthMapVar = _effect.GetVariableByName("gDepthMap").AsResource();
@@ -133,7 +152,7 @@ namespace SceneViewerWPF
             CreateIndexBuffer();
             CreateTextures();
 
-            _light = new DxLight
+            Light = new DxLight
             {
                 Type = DxLightType.None,
                 Position = new Vector3(0, 0, 0f),
@@ -345,24 +364,6 @@ namespace SceneViewerWPF
             return 0f;
         }
 
-        public float Scale
-        {
-            get { return _vertexScale; }
-            set { _vertexScale = value; }
-        }
-
-        public Vector4 FillColor
-        {
-            get { return _fillColor; }
-            set { _fillColor = value; }
-        }
-
-        public DxLight Light
-        {
-            get { return _light; }
-            set { _light = value; }
-        }
-
         public void Update(float dt, float time)
         {
             // ignore
@@ -373,28 +374,32 @@ namespace SceneViewerWPF
             if (_vertexBuffer == null || _vertexCount == 0)
                 return;
 
+            // set variables
             _worldVar.SetMatrix(Matrix.Scaling(Scale, -Scale, Scale));
             _eyePosWVar.Set(camera.Eye);
             _viewProjVar.SetMatrix(camera.View*camera.Projection);
-            _fillColorVar.Set(_fillColor);
+            _fillColorVar.Set(FillColor);
+            _userAlphaVar.Set(UserAlpha);
+            _backAlphaVar.Set(BackgroundAlpha);
 
             _resVar.Set(new Vector2(_xRes, _yRes));
             _focalLengthDepthVar.Set(_focalLengthDepth);
             _focalLengthImageVar.Set(_focalLengthImage);
             _depthToRgbVar.SetMatrix(_depthToRgb);
 
-            _light.SetEffectVariable(_lightVariable);
+            Light.SetEffectVariable(_lightVariable);
 
             _depthMapVar.SetResource(_depthMapBufferRV);
             _sceneMapVar.SetResource(_sceneMapBufferRV);
             _imageMapVar.SetResource(_imageTextureRV);
 
+            // set IA inputs
             _dxDevice.InputAssembler.SetInputLayout(_inputLayout);
             _dxDevice.InputAssembler.SetPrimitiveTopology(PrimitiveTopology.TriangleList);
             _dxDevice.InputAssembler.SetIndexBuffer(_indexBuffer, Format.R32_UInt, 0);
-            _dxDevice.InputAssembler.SetVertexBuffers(0, 
-                new VertexBufferBinding(_vertexBuffer, PointVertex.SizeOf, 0));
+            _dxDevice.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(_vertexBuffer, PointVertex.SizeOf, 0));
 
+            // render
             for (int p = 0; p < _renderTech.Description.PassCount; p++)
             {
                 _renderTech.GetPassByIndex(p).Apply();

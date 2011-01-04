@@ -110,6 +110,10 @@ namespace SceneViewerWPF
             {
                 // copy settings
                 _kinectPoints.Scale = oldRenderer.Scale;
+                _kinectPoints.UserAlpha = oldRenderer.UserAlpha;
+                _kinectPoints.BackgroundAlpha = oldRenderer.BackgroundAlpha;
+                _kinectPoints.FillColor = oldRenderer.FillColor;
+                _kinectPoints.Light = oldRenderer.Light;
 
                 oldRenderer.Dispose();
             }
@@ -301,7 +305,7 @@ namespace SceneViewerWPF
 
             // clear buffers
             _dxDevice.ClearDepthStencilView(_dxDepthStencilView, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
-            _dxDevice.ClearRenderTargetView(_dxRenderView, new Color4(0f, 0, 0, 0)); // uses transparent color
+            _dxDevice.ClearRenderTargetView(_dxRenderView, new Color4(0f, 0f, 0f, 0f)); // uses transparent fill color
 
             // set rasterization parameters
             var rsd = new RasterizerStateDescription

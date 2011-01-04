@@ -49,6 +49,18 @@ namespace SceneViewerWPF
             set { texAlpha.Value = value; }
 	    }
 
+	    public double UserAlpha
+	    {
+            get { return userAlpha.Value; }
+            set { userAlpha.Value = value; }
+	    }
+
+	    public double BackgroundAlpha
+	    {
+            get { return backAlpha.Value; }
+            set { backAlpha.Value = value; }
+	    }
+
 	    public float? Scale
 	    {
 	        get

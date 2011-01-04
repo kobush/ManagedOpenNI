@@ -15,7 +15,9 @@
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto" MinHeight="21"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition/>
 		</Grid.RowDefinitions>
 		<Grid.ColumnDefinitions>
@@ -46,6 +48,16 @@
 		<Slider x:Name="texAlpha" Grid.Column="1" Grid.Row="5" Maximum="1" TickFrequency="0.1" Value="1" Margin="0,0,26,0"
                 ValueChanged="TexAlpha_OnValueChanged"/>
 		<TextBlock  HorizontalAlignment="Right" Grid.Column="1" Grid.Row="5" Text="{Binding Value, ElementName=texAlpha, StringFormat=F1}" VerticalAlignment="Center" Padding="0,0,4,0" />
+
+        <Label Content="Background alpha:" Grid.Row="6" d:LayoutOverrides="Height" />
+        <Slider x:Name="backAlpha" Grid.Column="1" Grid.Row="6" Maximum="1" TickFrequency="0.1" Value="0.5" Margin="0,0,26,0"
+                ValueChanged="TexAlpha_OnValueChanged"/>
+        <TextBlock  HorizontalAlignment="Right" Grid.Column="1" Grid.Row="6" Text="{Binding Value, ElementName=backAlpha, StringFormat=F1}" VerticalAlignment="Center" Padding="0,0,4,0" />
+
+        <Label Content="User alpha:" Grid.Row="7" d:LayoutOverrides="Height" />
+        <Slider x:Name="userAlpha" Grid.Column="1" Grid.Row="7" Maximum="1" TickFrequency="0.1" Value="1" Margin="0,0,26,0"
+                ValueChanged="TexAlpha_OnValueChanged"/>
+        <TextBlock  HorizontalAlignment="Right" Grid.Column="1" Grid.Row="7" Text="{Binding Value, ElementName=userAlpha, StringFormat=F1}" VerticalAlignment="Center" Padding="0,0,4,0" />
 
     </Grid>
 </UserControl>

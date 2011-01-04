@@ -19,6 +19,8 @@ namespace SceneViewerWPF
         float Scale { get; set; }
         Vector4 FillColor { get; set; }
         DxLight Light { get; set; }
+        float BackgroundAlpha { get; set; }
+        float UserAlpha { get; set; }
     }
 
     public interface IRenderer : IDisposable
@@ -61,8 +63,6 @@ namespace SceneViewerWPF
         private ShaderResourceView _depthMapBufferRV;
         private EffectResourceVariable _depthMapVar;
 
-        private float _vertexScale = 0.1f; // Scale from mm to cm!
-
         private float _focalLengthDepth;
         private float _focalLengthImage;
 
@@ -70,12 +70,10 @@ namespace SceneViewerWPF
         private EffectScalarVariable _focalLengthImageVar;
         private EffectVectorVariable _resVar;
 
-        private Vector4 _fillColor;
         private EffectVectorVariable _fillColorVar;
 
         private Matrix _depthToRgb;
         private EffectMatrixVariable _depthToRgbVar;
-        private DxLight _light;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct PointVertex
@@ -95,26 +93,19 @@ namespace SceneViewerWPF
             }
         }
 
-        public float Scale
-        {
-            get { return _vertexScale;  }
-            set { _vertexScale = value; }
-        }
+        public float Scale { get; set; }
 
-        public Vector4 FillColor
-        {
-            get { return _fillColor; }
-            set { _fillColor = value; }
-        }
+        public Vector4 FillColor { get; set; }
 
-        public DxLight Light
-        {
-            get { return _light; }
-            set { _light = value; }
-        }
+        public DxLight Light { get; set; }
+
+        public float BackgroundAlpha { get; set; }
+
+        public float UserAlpha { get; set; }
 
         public DxKinectPointsCloudRenderer(Device dxDevice)
         {
+            Scale = 0.1f;
             _dxDevice = dxDevice;
 
             LoadEffect(@"Assets\kinectpoints_simple.fx");
@@ -268,7 +259,7 @@ namespace SceneViewerWPF
             _worldVar.SetMatrix(Matrix.Scaling(Scale, -Scale, Scale));
             _eyePosWVar.Set(camera.Eye);
             _viewProjVar.SetMatrix(camera.View*camera.Projection);
-            _fillColorVar.Set(_fillColor);
+            _fillColorVar.Set(FillColor);
 
             _resVar.Set(new Vector2(_xRes, _yRes));
             _focalLengthDepthVar.Set(_focalLengthDepth);

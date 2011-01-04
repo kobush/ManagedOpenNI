@@ -10,7 +10,8 @@ cbuffer cbPerFrame {
 	float4	gFillColor;
 	matrix	gViewProj;
 	matrix  gWorld;
-	uint	gUserLabel;
+	float	gBackAlpha = 1.0;
+	float	gUserAlpha = 1.0;
 };
 
 cbuffer cb0 {
@@ -32,17 +33,6 @@ Buffer<uint> gSceneMap;
 struct VS_IN
 {
 	int2 pos : POSITION;
-};
-
-//--------------------------------------------------------------------------------------
-
-struct VS_OUT
-{
-	float4 posH : SV_POSITION;
-    float3 posW : POSITION;
-	float3 normalW : NORMAL;
-    float2 texC : TEXCOORD;
-	float sizeW : SIZE;
 };
 
 //--------------------------------------------------------------------------------------
@@ -85,15 +75,13 @@ float4 ComputeVertexPosSizeW(int x, int y)
 		*/
 
 	uint depth = 0;
-	uint label = 0;
 	if (InBounds(x,y))
 	{
 		int ptr = gRes.x * y + x;
 		depth = gDepthMap.Load(ptr);
-		label = gSceneMap.Load(ptr);
 	}
 
-	[branch] if (depth == 0 || label != gUserLabel)
+	[branch] if (depth == 0)
 	{
 		// ignore this point
 		return float4(0,0,0,0);
@@ -119,6 +107,38 @@ float3 ComputeFaceNormal(float3 p0, float3 p1, float3 p2)
 	return normalize(cross(u,v));
 }
 
+
+float ComputerVertexAlpha(int2 pos) 
+{
+	uint label = 0;
+	float alpha = 0;
+
+	[branch] 
+	if (InBounds(pos.x, pos.y))
+	{
+		int ptr = gRes.x * pos.y + pos.x;
+		label = gSceneMap.Load(ptr);
+
+		if (label == 0) // this is background
+			return gBackAlpha;
+		else // this looks like a user
+			return gUserAlpha;
+	}
+	return 0;
+}
+
+//--------------------------------------------------------------------------------------
+
+struct VS_OUT
+{
+	float4 posH : SV_POSITION;
+    float3 posW : POSITION;
+	float3 normalW : NORMAL;
+    float2 texC : TEXCOORD;
+	float alpha : ALPHA;
+	float sizeW : PSIZE;
+};
+
 VS_OUT VS(VS_IN vIn)
 {
 	VS_OUT vOut;
@@ -128,13 +148,14 @@ VS_OUT VS(VS_IN vIn)
 	float4 v0 = ComputeVertexPosSizeW(u, v);
 
 	[branch]
-	if (v0.z == 0)
+	if (v0.z == 0) // vertex is not valid - don't emit
 	{
 		vOut.posW = float3(0,0,0);
 		vOut.posH = float4(0,0,0,0);
 		vOut.sizeW = 0;
 		vOut.normalW = float3(0,0,0);
 		vOut.texC = float2(0,0);
+		vOut.alpha = 0;
 	}
 
 	// world transform
@@ -143,7 +164,9 @@ VS_OUT VS(VS_IN vIn)
 	vOut.posH = mul(float4(vOut.posW, 1.0f), gViewProj);
 	// transformed size
 	vOut.sizeW = mul(float4(v0.w, 0.0, 0.0, 1.0), gWorld).x;
-	
+	// vertex alpha
+	vOut.alpha = ComputerVertexAlpha(vIn.pos);
+
 	// transform to RGB camera space
 	float4 pos = mul(float4(v0.xyz, 1.0), gDepthToRgb);
 
@@ -211,6 +234,7 @@ struct GS_OUT
 	float3 posW : POSITION;
 	float3 normalW : NORMAL;
 	float2 texC : TEXCOORD;
+	float alpha : ALPHA;
 };
 
 [maxvertexcount(3)]
@@ -247,6 +271,7 @@ void GS(triangle VS_OUT gIn[3], inout TriangleStream<GS_OUT> triStream)
 		gOut.posH = gIn[i].posH;
 		gOut.texC = gIn[i].texC; 
 		gOut.normalW = gIn[i].normalW;
+		gOut.alpha = gIn[i].alpha;
 		triStream.Append(gOut);
 	}
 }
@@ -257,25 +282,30 @@ void GS(triangle VS_OUT gIn[3], inout TriangleStream<GS_OUT> triStream)
 
 SamplerState gTriLinearSam
 {
-	Filter = MIN_MAG_MIP_LINEAR;
+	Filter = MIN_MAG_MIP_LINEAR; // try POINT
 	AddressU = Border;
 	AddressV = Border;
 };
 
 float4 PS( GS_OUT pIn) : SV_Target
 {
+	// clip fully transparent pixels
+	clip(pIn.alpha - 0.1f);
+
+	// sample RGB texture
 	float4 sample = gImageMap.Sample( gTriLinearSam, pIn.texC );
 
 	// mix with fill color based on alpha
-	float4 diffuse = float4(lerp(sample.xyz, gFillColor.xyz, gFillColor.w), 1.0f);
+	float4 diffuse = float4(lerp(sample.xyz, gFillColor.xyz, gFillColor.w), pIn.alpha);
 	
+
 	[branch]
 	if (gLight.type == 0)
 	{
 		// no lighting so just return input color
 		return diffuse;
 	}
-	else 
+	else // compute light
 	{
 		float4 spec = float4(0.2, 0.2, 0.2, 0);
 
@@ -312,6 +342,23 @@ float4 PS( GS_OUT pIn) : SV_Target
 
 //--------------------------------------------------------------------------------------
 
+BlendState NoBlending
+{
+	BlendEnable[0] = FALSE;
+};
+
+BlendState SrcAlphaBlendingAdd
+{
+	BlendEnable[0] = TRUE;
+	SrcBlend = SRC_ALPHA;
+	DestBlend = INV_SRC_ALPHA;
+	BlendOp = ADD;
+    SrcBlendAlpha = SRC_ALPHA;
+    DestBlendAlpha = ZERO;
+    BlendOpAlpha = ADD;
+	RenderTargetWriteMask[0] = 0x0F;
+};
+
 technique10 Render
 {
     pass P0
@@ -320,8 +367,7 @@ technique10 Render
         SetGeometryShader( CompileShader( gs_4_0, GS() ) );
         SetPixelShader( CompileShader( ps_4_0, PS() ) );
 
-		// restore states
-		SetBlendState(NULL, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
+		SetBlendState(SrcAlphaBlendingAdd, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
 		SetDepthStencilState( NULL, 0 );
     }
 }

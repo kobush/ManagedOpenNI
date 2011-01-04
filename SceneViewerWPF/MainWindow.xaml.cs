@@ -210,6 +210,9 @@ namespace SceneViewerWPF
                             renderProps.FillColor.ScG,
                             renderProps.FillColor.ScB,
                             (float) (1.0 - renderProps.TextureAlpha));
+
+            _dxScene.PointsCloudRenderer.UserAlpha = (float) renderProps.UserAlpha;
+            _dxScene.PointsCloudRenderer.BackgroundAlpha = (float) renderProps.BackgroundAlpha;
         }
 
         private void OnLightPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
