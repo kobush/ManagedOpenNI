@@ -92,7 +92,7 @@ float4 ComputeVertexPosSizeW(int x, int y)
 
 		float4 pos;
 		pos.x = (x - gRes.x / 2.0) * pixelSize;
-		pos.y = (y - gRes.y / 2.0) * pixelSize;
+		pos.y = (gRes.y / 2.0 - y) * pixelSize;
 		pos.z = depth;
 		pos.w = pixelSize;
 
@@ -177,7 +177,7 @@ VS_OUT VS(VS_IN vIn)
 	v = pos.y * (gFocalLengthImage / pos.z) + (gRes.y / 2.0);
 
 	// set texture coordinates
-	vOut.texC = float2((u+0.5) / gRes.x, (v + 0.5) / gRes.y);
+	vOut.texC = float2((u+0.5) / gRes.x, 1 - (v + 0.5) / gRes.y);
 
 	// don't bother with calculating normals if lighting is not used
 	[branch]
@@ -203,9 +203,9 @@ VS_OUT VS(VS_IN vIn)
 	
 		int o = 1;
 		float4 v1 = ComputeVertexPosSizeW(vIn.pos.x - o, vIn.pos.y);
-		float4 v2 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y + o);
+		float4 v2 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y - o);
 		float4 v3 = ComputeVertexPosSizeW(vIn.pos.x + o, vIn.pos.y);
-		float4 v4 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y - o);
+		float4 v4 = ComputeVertexPosSizeW(vIn.pos.x, vIn.pos.y + o);
 
 		// average face normals
 		// pixelSize will be 0 for invalid vertices

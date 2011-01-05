@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -24,6 +25,10 @@ namespace SceneViewerWPF
 
         private KinectCameraInfo _cameraInfo;
         private UserGenerator _userGenerator;
+        private SkeletonCapability _skeletonCapability;
+        private PoseDetectionCapability _poseDetectionCapability;
+        private string _calibPose;
+        private List<SkeletonJoint> _availableJoints;
 
         public KinectCameraInfo CameraInfo
         {
@@ -163,8 +168,23 @@ namespace SceneViewerWPF
                 if (_userGenerator == null)
                     throw new InvalidOperationException("Viewer must have an user node!");
 
+                _skeletonCapability = new SkeletonCapability(_userGenerator);
+                _poseDetectionCapability = new PoseDetectionCapability(_userGenerator);
+                _calibPose = _skeletonCapability.GetCalibrationPose();
+
                 _userGenerator.NewUser += UserGenerator_NewUser;
                 _userGenerator.LostUser += UserGenerator_LostUser;
+                _poseDetectionCapability.PoseDetected += PoseDetectionCapability_PoseDetected;
+                _skeletonCapability.CalibrationEnd += SkeletonCapbility_CalibrationEnd;
+
+                // check other profiles
+                _skeletonCapability.SetSkeletonProfile(SkeletonProfile.All);
+
+                _availableJoints = new List<SkeletonJoint>();
+                foreach (SkeletonJoint value in Enum.GetValues(typeof(SkeletonJoint)))
+                    if (_skeletonCapability.IsJointAvailable(value))
+                        _availableJoints.Add(value);
+
                 //_userGenerator.StartGenerating();
 
                 // initialize buffers
@@ -200,8 +220,45 @@ namespace SceneViewerWPF
             Debug.Print("User found {0}", id);
 
             EnsureFrame();
+            EnsureUser((int)id);
 
-            CurrentFrame.Users.Add(new KinectUserInfo { Id = (int) id});
+            _poseDetectionCapability.StartPoseDetection(_calibPose, id);
+        }
+
+        private void PoseDetectionCapability_PoseDetected(ProductionNode node, string pose, uint id)
+        {
+            Debug.Print("Pose detected {0} on user {1}", pose, id);
+
+            _poseDetectionCapability.StopPoseDetection(id);
+            _skeletonCapability.RequestCalibration(id, true);
+        }
+
+        private void SkeletonCapbility_CalibrationEnd(ProductionNode node, uint id, bool success)
+        {
+            Debug.Print("Calibration {0} for user {1}", success ? "succeeded" : "failed", id);
+
+            var user = EnsureUser((int)id);
+
+            if (success)
+            {
+                _skeletonCapability.StartTracking(id);
+            }
+            else
+            {
+                // restart pose detection
+                _poseDetectionCapability.StartPoseDetection(_calibPose, id);
+            }
+        }
+
+        private KinectUserInfo EnsureUser(int id)
+        {
+            if (!CurrentFrame.Users.Contains(id))
+            {
+                var user = new KinectUserInfo(id);
+                CurrentFrame.Users.Add(user);
+                return user;
+            }
+            return CurrentFrame.Users[id];
         }
 
         private void UpdateFrameData()
@@ -228,7 +285,8 @@ namespace SceneViewerWPF
             // copy depth data
             Marshal.Copy(_depthMeta.DepthMapPtr, _currentFrame.DepthMap, 0, depthSize);
 
-            try
+            //TODO: add functions so floor plane is not needed
+  /*          try
             {
                 Plane3D floor = new Plane3D();
                 //_sceneNode.
@@ -238,7 +296,7 @@ namespace SceneViewerWPF
             catch (XnStatusException)
             {
                 _currentFrame.Floor = null;
-            }
+            }*/
 
             //TODO: the scene meta should be read from SceneAnalyzer instead of UserGenerator
             _sceneMeta = _userGenerator.GetUserPixels(0);
@@ -251,12 +309,47 @@ namespace SceneViewerWPF
             // copy scene data (user labels)
             Marshal.Copy(_sceneMeta.SceneMapPtr, _currentFrame.SceneMap, 0, sceneSize);
 
-            var userIds = _userGenerator.GetUsers();
-            foreach (var user in CurrentFrame.Users)
+            // update user state
+            foreach (var userId in _userGenerator.GetUsers())
             {
-                Debug.Assert(userIds.Contains((uint)user.Id));
+                var user = EnsureUser((int) userId);
 
-                user.CenterOfMass = _userGenerator.GetCoM((uint) user.Id);
+                user.CenterOfMass = _userGenerator.GetCoM(userId);
+                user.IsTracking = _skeletonCapability.IsTracking(userId);
+                user.IsCalibrating = _skeletonCapability.IsCalibrating(userId);
+                user.LastFrameUpdated = _currentFrame.FrameId;
+
+                if (user.IsTracking)
+                {
+                    // update all joints
+                    foreach (var joint in _availableJoints)
+                    {
+                        GetJoint(user, joint);
+                    }
+                }
+            }
+        }
+
+        private void GetJoint(KinectUserInfo user, SkeletonJoint joint)
+        {
+            try
+            {
+                var pos = new SkeletonJointPosition();
+                _skeletonCapability.GetSkeletonJointPosition((uint) user.Id, joint, ref pos);
+
+                if (pos.position.Z == 0)
+                {
+                    pos.fConfidence = 0;
+                }
+
+                // update data
+                user.Joints[joint] = pos;
+            }
+            catch (XnStatusException)
+            {
+                Debug.Print("Error for joint {0}",joint);
+
+                user.Joints.Remove(joint);
             }
         }
 
@@ -283,10 +376,11 @@ namespace SceneViewerWPF
 
             // get the pixel size in mm ("ZPPS" = pixel size at zero plane) 
             // _imageCameraInfo.ZeroPlanePixelSize = _imageNode.GetRealProperty("ZPPS") * 2.0;
-            _cameraInfo.ZeroPlanePixelSize = _depthNode.GetRealProperty("ZPPS")*2.0;
+            _cameraInfo.ZeroPlanePixelSize = _depthNode.GetRealProperty("ZPPS") * 2.0;
 
             _cameraInfo.FocalLengthImage = 525f;
-            _cameraInfo.FocalLengthDetph = _cameraInfo.ZeroPlaneDistance/_cameraInfo.ZeroPlanePixelSize;
+            _cameraInfo.FocalLengthDetph = _cameraInfo.ZeroPlaneDistance / _cameraInfo.ZeroPlanePixelSize; 
+                // 585.05108211f;
 
             // get base line (distance from IR camera to laser projector in cm)
             _cameraInfo.Baseline = _depthNode.GetRealProperty("LDDIS")*10;
@@ -294,7 +388,9 @@ namespace SceneViewerWPF
             _cameraInfo.NoSampleValue = _depthNode.GetIntProperty("NoSampleValue");
 
             // best guess
-            _cameraInfo.DepthToRgb  = Matrix.Translation(35f, 15f, 0f);
+            _cameraInfo.DepthToRgb  = Matrix.Translation(35f, -15f, 0f);
+            // from ROS
+            //_cameraInfo.DepthToRgb  = Matrix.Translation(25.165f, -0.047f, 4.077f);
 
 /*
             //from ROS calibraition
@@ -336,10 +432,19 @@ namespace SceneViewerWPF
 
     public class KinectUserInfo
     {
+        public KinectUserInfo(int id)
+        {
+            Id = id;
+            Joints = new Dictionary<SkeletonJoint, SkeletonJointPosition>();
+        }
+
         public int Id { get; set; }
         public bool IsTracking { get; set; }
         public bool IsCalibrating { get; set; }
         public Point3D CenterOfMass { get; set; }
+        public Dictionary<SkeletonJoint, SkeletonJointPosition> Joints { get; private set; }
+
+        public int LastFrameUpdated { get; set; }
     }
 
     public class KinectUserCollection : KeyedCollection<int,KinectUserInfo>

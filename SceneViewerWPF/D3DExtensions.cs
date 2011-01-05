@@ -86,5 +86,11 @@ namespace SceneViewerWPF
             sb.Append(pt.Z.ToString(format));
             return sb.ToString();
         }
+
+        public static Point3D ToPoint3D(this xn.Point3D pt)
+        {
+            return new Point3D(pt.X, pt.Y, pt.Z);
+        }
+
     }
 }

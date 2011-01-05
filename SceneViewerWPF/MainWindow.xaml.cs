@@ -10,19 +10,26 @@ using HelixToolkit;
 using NiSimpleViewerWPF;
 using SlimDX;
 using SlimDX.Windows;
-using Matrix = System.Windows.Media.Matrix;
+using xn;
+using Point3D = System.Windows.Media.Media3D.Point3D;
 
 namespace SceneViewerWPF
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow
     {
         private class UserModel
         {
             public ModelVisual3D Model { get; private set; }
             private readonly SphereVisual3D _centerOfMass;
+
+            private readonly Dictionary<SkeletonJoint, SphereVisual3D> _joints 
+                = new Dictionary<SkeletonJoint, SphereVisual3D>();
+
+            private readonly Dictionary<Tuple<SkeletonJoint, SkeletonJoint>, PipeVisual3D> _lines
+                = new Dictionary<Tuple<SkeletonJoint, SkeletonJoint>, PipeVisual3D>();
 
             public Matrix3D World
             {
@@ -39,11 +46,15 @@ namespace SceneViewerWPF
                 var group = new ModelVisual3D();
                 group.Transform = new MatrixTransform3D();
 
-                _centerOfMass = new SphereVisual3D();
-                _centerOfMass.Center = new Point3D(0,0,0);
-                _centerOfMass.Material = Materials.Yellow;
-                _centerOfMass.Radius = 25; // about 5cm diameter
-                _centerOfMass.Transform = new TranslateTransform3D();
+                _centerOfMass = new SphereVisual3D
+                                    {
+                                        Center = new Point3D(0, 0, 0),
+                                        Material = Materials.Yellow,
+                                        Radius = 25,
+                                        PhiDiv = 15,
+                                        ThetaDiv = 30,
+                                        Transform = new TranslateTransform3D()
+                                    };
 
                 group.Children.Add(_centerOfMass);
 
@@ -51,13 +62,164 @@ namespace SceneViewerWPF
             }
 
 
-            public void Update(KinectUserInfo userInfo)
+            public void Update(KinectUserInfo user)
             {
                 // TODO: optimize
                 var trans = ((TranslateTransform3D)_centerOfMass.Transform);
-                trans.OffsetX = userInfo.CenterOfMass.X;
-                trans.OffsetY = -userInfo.CenterOfMass.Y;
-                trans.OffsetZ = userInfo.CenterOfMass.Z;
+                trans.OffsetX = user.CenterOfMass.X;
+                trans.OffsetY = user.CenterOfMass.Y;
+                trans.OffsetZ = user.CenterOfMass.Z;
+
+                if (user.IsCalibrating)
+                    _centerOfMass.Material = Materials.Red;
+                else if (user.IsTracking)
+                    _centerOfMass.Material = Materials.Green;
+                else
+                    _centerOfMass.Material = Materials.Yellow;
+
+                if (user.IsTracking)
+                {
+                    GetJoint(user, SkeletonJoint.Head);
+                    GetJoint(user, SkeletonJoint.Neck);
+
+                    GetJoint(user, SkeletonJoint.LeftShoulder);
+                    GetJoint(user, SkeletonJoint.LeftElbow);
+                    GetJoint(user, SkeletonJoint.LeftHand);
+
+                    GetJoint(user, SkeletonJoint.RightShoulder);
+                    GetJoint(user, SkeletonJoint.RightElbow);
+                    GetJoint(user, SkeletonJoint.RightHand);
+
+                    GetJoint(user, SkeletonJoint.Torso);
+
+                    GetJoint(user, SkeletonJoint.LeftHip);
+                    GetJoint(user, SkeletonJoint.LeftKnee);
+                    GetJoint(user, SkeletonJoint.LeftFoot);
+
+                    GetJoint(user, SkeletonJoint.RightHip);
+                    GetJoint(user, SkeletonJoint.RightKnee);
+                    GetJoint(user, SkeletonJoint.RightFoot);
+
+                    DrawLine(user, SkeletonJoint.Head, SkeletonJoint.Neck);
+
+                    DrawLine(user, SkeletonJoint.LeftShoulder, SkeletonJoint.Torso);
+                    DrawLine(user, SkeletonJoint.RightShoulder, SkeletonJoint.Torso);
+
+                    DrawLine(user, SkeletonJoint.Neck, SkeletonJoint.LeftShoulder);
+                    DrawLine(user, SkeletonJoint.LeftShoulder, SkeletonJoint.LeftElbow);
+                    DrawLine(user, SkeletonJoint.LeftElbow, SkeletonJoint.LeftHand);
+
+                    DrawLine(user, SkeletonJoint.Neck, SkeletonJoint.RightShoulder);
+                    DrawLine(user, SkeletonJoint.RightShoulder, SkeletonJoint.RightElbow);
+                    DrawLine(user, SkeletonJoint.RightElbow, SkeletonJoint.RightHand);
+
+                    DrawLine(user, SkeletonJoint.LeftHip, SkeletonJoint.Torso);
+                    DrawLine(user, SkeletonJoint.RightHip, SkeletonJoint.Torso);
+                    DrawLine(user, SkeletonJoint.LeftHip, SkeletonJoint.RightHip);
+
+                    DrawLine(user, SkeletonJoint.LeftHip, SkeletonJoint.LeftKnee);
+                    DrawLine(user, SkeletonJoint.LeftKnee, SkeletonJoint.LeftFoot);
+
+                    DrawLine(user, SkeletonJoint.RightHip, SkeletonJoint.RightKnee);
+                    DrawLine(user, SkeletonJoint.RightKnee, SkeletonJoint.RightFoot);
+                }
+            }
+
+            private void DrawLine(KinectUserInfo user, SkeletonJoint p1, SkeletonJoint p2)
+            {
+                PipeVisual3D lineVisual = null;
+                bool isVisible = false;
+
+                SkeletonJointPosition p1Data, p2Data;
+                if (user.IsTracking &&
+                    user.Joints.TryGetValue(p1, out p1Data) && 
+                    user.Joints.TryGetValue(p2, out p2Data))
+                {
+                    if (p1Data.fConfidence != 0 && p2Data.fConfidence != 0)
+                    {
+                        isVisible = true;
+
+                        var key = new Tuple<SkeletonJoint, SkeletonJoint>(p1, p2);
+                        if (_lines.TryGetValue(key, out lineVisual) == false)
+                        {
+                            lineVisual = new PipeVisual3D
+                                             {
+                                                 Material = Materials.Gold, 
+                                                 Diameter = 8, 
+                                                 ThetaDiv = 18
+                                             };
+
+                            _lines[key] = lineVisual;
+                        }
+
+                        // update position
+                        lineVisual.Point1 = p1Data.position.ToPoint3D();
+                        lineVisual.Point2 = p2Data.position.ToPoint3D();
+                    }
+                }
+
+                // remove visual
+                if (lineVisual != null)
+                {
+                    if (isVisible)
+                    {
+                        if (!Model.Children.Contains(lineVisual))
+                            Model.Children.Add(lineVisual);
+                    }
+                    else
+                    {
+                        Model.Children.Remove(lineVisual);
+                    }
+                }
+            }
+
+            private void GetJoint(KinectUserInfo user, SkeletonJoint joint)
+            {
+                SphereVisual3D jointVisual = null;
+
+                SkeletonJointPosition jointData;
+                if (user.IsTracking && user.Joints.TryGetValue(joint, out jointData))
+                {
+                    if (jointData.fConfidence > 0)
+                    {
+                        if (_joints.TryGetValue(joint, out jointVisual) == false)
+                        {
+                            // joints are indicated by smaller blue balls
+                            jointVisual = new SphereVisual3D
+                                              {
+                                                  Center = new Point3D(0, 0, 0),
+                                                  Material = Materials.Blue,
+                                                  Radius = 16, 
+                                                  PhiDiv = 15,
+                                                  ThetaDiv = 30,
+                                                  Transform = new TranslateTransform3D()
+                                              };
+
+                            _joints[joint] = jointVisual;
+                        }
+                    
+                        SetTransformFromPoint(jointVisual, jointData.position);
+
+                        if (!Model.Children.Contains(jointVisual))
+                            Model.Children.Add(jointVisual);
+
+                        return;
+                    }
+                }
+
+                if (jointVisual != null)
+                {
+                    if (Model.Children.Contains(jointVisual))
+                        Model.Children.Remove(jointVisual);
+                }
+            }
+
+            private void SetTransformFromPoint(Visual3D visual3D, xn.Point3D point)
+            {
+                var trans = ((TranslateTransform3D)visual3D.Transform);
+                trans.OffsetX = point.X;
+                trans.OffsetY = point.Y;
+                trans.OffsetZ = point.Z;
             }
         }
 
@@ -137,6 +299,7 @@ namespace SceneViewerWPF
             var tracker = ((KinectTracker)sender);
             var frame = tracker.CurrentFrame;
 
+            var invisibleUsers = new List<UserModel>(_users);
             foreach (var user in frame.Users)
             {
                 // update user model
@@ -144,21 +307,31 @@ namespace SceneViewerWPF
                 if (model == null)
                 {
                     model = new UserModel(user.Id);
+                    model.World = GetKinectToHelixTransform().ToMatrix3D();
                     _users.Add(model);
-
-                    // show in view
-                    helixView.Children.Add(model.Model);
+                }
+                else
+                {
+                    invisibleUsers.Remove(model);
                 }
                 model.Update(user);
-                model.World = GetKinectToHelixTransform().ToMatrix3D();
-                //TODO: remove not visible models
+
+                // show in view
+                if (!helixView.Children.Contains(model.Model))
+                    helixView.Children.Add(model.Model);
+            }
+
+            foreach (var model in invisibleUsers)
+            {
+                helixView.Children.Remove(model.Model);
+                _users.Remove(model);
             }
 
             if (frame.Floor != null)
             {
                 var plane = frame.Floor.Value;
-                _floorVisual.Origin = new Point3D(plane.ptPoint.X, -plane.ptPoint.Y, plane.ptPoint.Z);
-                _floorVisual.Normal = new Vector3D(plane.vNormal.X, -plane.vNormal.Y, plane.vNormal.Z);
+                _floorVisual.Origin = new Point3D(plane.ptPoint.X, plane.ptPoint.Y, plane.ptPoint.Z);
+                _floorVisual.Normal = new Vector3D(plane.vNormal.X, plane.vNormal.Y, plane.vNormal.Z);
 
                 if (!helixView.Children.Contains(_floorVisual))
                     helixView.Children.Add(_floorVisual);
@@ -180,7 +353,7 @@ namespace SceneViewerWPF
             busyIndicator.IsBusy = false;
         }
 
-        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        private void MainWindow_Closing(object sender, CancelEventArgs e)
         {
             if (_kinectTracker != null)
                 _kinectTracker.StopTracking();
@@ -296,7 +469,7 @@ namespace SceneViewerWPF
         private static SlimDX.Matrix GetKinectToHelixTransform()
         {
             var scale = (float)KinectToHelixScale;
-            var world = SlimDX.Matrix.Scaling(scale, -scale, scale);
+            var world = SlimDX.Matrix.Scaling(scale, scale, scale);
             world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
             world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
 

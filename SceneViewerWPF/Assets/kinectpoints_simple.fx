@@ -51,7 +51,7 @@ VS_OUT VS(VS_IN vIn)
 	float pixelSize = depth / gFocalLengthDepth;
 	float4 pos;
 	pos.x = (u - gRes.x / 2.0) * pixelSize;
-	pos.y = (v - gRes.y / 2.0) * pixelSize;
+	pos.y = (gRes.y / 2.0 - v) * pixelSize;
 	pos.z = depth;
 	pos.w = 1.0;
 	
@@ -74,7 +74,7 @@ VS_OUT VS(VS_IN vIn)
 	v = pos.y * (gFocalLengthImage / pos.z) + (gRes.y / 2.0);
 
 	// map to texture coord. [0..1]
-	vOut.texC = float2(u / gRes.x, v / gRes.y);
+	vOut.texC = float2(u / gRes.x, 1 - v / gRes.y);
 
     return vOut;
 }
