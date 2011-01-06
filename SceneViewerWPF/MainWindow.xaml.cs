@@ -20,6 +20,39 @@ namespace SceneViewerWPF
     /// </summary>
     public partial class MainWindow
     {
+        private class HandModel
+        {
+            public SphereVisual3D Model { get; private set; }
+
+            public Matrix3D World
+            {
+                get { return ((MatrixTransform3D)Model.Transform).Matrix; }
+                set { ((MatrixTransform3D)Model.Transform).Matrix = value; }
+            }
+
+            public int Id { get; private set; }
+
+            public HandModel(int id)
+            {
+                Id = id;
+
+                Model = new SphereVisual3D
+                {
+                    Center = new Point3D(0, 0, 0),
+                    Material = Materials.Rainbow,
+                    Radius = 25,
+                    PhiDiv = 15,
+                    ThetaDiv = 30,
+                    Transform = new MatrixTransform3D()
+                };
+            }
+
+            public void Update(KinectHandInfo hand)
+            {
+                Model.Center = hand.Position.ToPoint3D();
+            }
+        }
+
         private class UserModel
         {
             public ModelVisual3D Model { get; private set; }
@@ -230,6 +263,7 @@ namespace SceneViewerWPF
         private DxScene _dxScene;
 
         private readonly List<UserModel> _users = new List<UserModel>();
+        private readonly List<HandModel> _hands = new List<HandModel>();
         private PlaneVisual3D _floorVisual;
 
         public MainWindow()
@@ -245,7 +279,8 @@ namespace SceneViewerWPF
             _floorVisual.Material = (Material) FindResource("FloorMaterial");
             _floorVisual.Transform = new MatrixTransform3D(GetKinectToHelixTransform().ToMatrix3D());
 
-            cameraProps.SelectedCameraModeChanged += OnSelectedCameraModeChanged;
+            cameraProps.ViewModel.SelectedCameraModeChanged += OnSelectedCameraModeChanged;
+            cameraProps.ViewModel.SelectedCameraPositionChanged += delegate { SetCameraPosition(); };
             renderProps.SelectedRenderTechChanged += OnSelectedRenderTechChanged;
             renderProps.RenderPropertyChanged += OnRendererPropertyChanged;
             lightProps.ViewModel.PropertyChanged += OnLightPropertyChanged;
@@ -263,14 +298,8 @@ namespace SceneViewerWPF
             _dxScene = new DxScene();
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
 
-            // position camera 1m and slightly above kinect
-            helixView.Camera.Position = new Point3D(1, 0, 0.25);
-            // look at point 1m in front camera
-            helixView.Camera.LookDirection = new Point3D(-1, 0, 0) - helixView.Camera.Position;
-            // set 1km depth of view
-            helixView.Camera.FarPlaneDistance = 1000;  
             helixView.CameraChanged += delegate { UpdateCameraPosition(); };
-            UpdateCameraPosition();
+            SetCameraPosition();
 
             UpdateRenderProperties();
             BeginRenderingScene();
@@ -281,6 +310,48 @@ namespace SceneViewerWPF
             _kinectTracker.TrackingUpdated += OnKinectTrackingUpdated;
             _kinectTracker.TrackinkgCompleted += OnKinectTrackingCompleted;
             _kinectTracker.StartTracking();
+        }
+
+        private void SetCameraPosition()
+        {
+            var camera = (PerspectiveCamera)helixView.Camera;
+            var positionMode = cameraProps.ViewModel.SelectedCameraPosition;
+            if (positionMode == CameraPositionMode.Free)
+            {
+                // position camera 1m and slightly above kinect
+                camera.Position = new Point3D(1, 0, 0.25);
+                // look at point 1m in front camera
+                camera.LookDirection = new Point3D(-1, 0, 0) - helixView.Camera.Position;
+                // set 1km depth of view
+                camera.FarPlaneDistance = 1000;
+                camera.FieldOfView = 45.0;
+                camera.Transform = null;
+            }
+            else if (positionMode == CameraPositionMode.KinectIR)
+            {
+                camera.Position = new Point3D(0,0,0);
+                camera.LookDirection = new Vector3D(-1,0,0);
+                camera.UpDirection = new Vector3D(0, 0, 1);
+                camera.FieldOfView = 57.8;
+                camera.Transform = null;
+            }
+            else if (positionMode == CameraPositionMode.KinectRGB)
+            {
+                camera.Position = new Point3D(0,-0.025,0);
+                camera.LookDirection = new Vector3D(-1,0,0);
+                camera.UpDirection = new Vector3D(0, 0, 1);
+                camera.FieldOfView = 62.7;
+                camera.Transform = null;
+            }
+            else if (positionMode == CameraPositionMode.Head)
+            {
+                // until head is found show view from kinect
+                camera.Position = new Point3D(0, 0, 0);
+                camera.LookDirection = new Vector3D(-1, 0, 0);
+                camera.UpDirection = new Vector3D(0, 0, 1);
+                camera.FieldOfView = 50.0;
+                //camera.Transform = new MatrixTransform3D(GetKinectToHelixTransform().ToMatrix3D());
+            }
         }
 
         void OnKinectTrackinkgStarted(object sender, EventArgs e)
@@ -294,14 +365,89 @@ namespace SceneViewerWPF
 
         private void OnKinectTrackingUpdated(object sender, EventArgs e)
         {
-            if (_dxScene == null) return;
-
             var tracker = ((KinectTracker)sender);
             var frame = tracker.CurrentFrame;
 
+            UpdateUsers(frame);
+            UpdateHands(frame);
+            UpdateFloor(frame);
+
+            if (freezeUpdates.IsChecked != true && _dxScene != null)
+            {
+                _dxScene.PointsCloudRenderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
+            }
+        }
+
+        private void UpdateFloor(KinectFrame frame)
+        {
+            if (frame.Floor != null)
+            {
+                var plane = frame.Floor.Value;
+                _floorVisual.Origin = new Point3D(plane.ptPoint.X, plane.ptPoint.Y, plane.ptPoint.Z);
+                _floorVisual.Normal = new Vector3D(plane.vNormal.X, plane.vNormal.Y, plane.vNormal.Z);
+
+                if (!helixView.Children.Contains(_floorVisual))
+                    helixView.Children.Add(_floorVisual);
+            }
+            else
+            {
+                if (helixView.Children.Contains(_floorVisual))
+                    helixView.Children.Remove(_floorVisual);
+            }
+        }
+
+        private void UpdateHands(KinectFrame frame)
+        {
+            var invisibleHands = new List<HandModel>(_hands);
+            foreach (var hand in frame.Hands)
+            {
+                var model = _hands.FirstOrDefault(h => h.Id == hand.Id);
+                if (model == null)
+                {
+                    model = new HandModel(hand.Id);
+                    model.World = GetKinectToHelixTransform().ToMatrix3D();
+                    _hands.Add(model);
+                }
+                else
+                {
+                    invisibleHands.Remove(model);
+                }
+                model.Update(hand);
+
+                if (!helixView.Children.Contains(model.Model))
+                    helixView.Children.Add(model.Model);
+            }
+
+
+            foreach (var model in invisibleHands)
+            {
+                helixView.Children.Remove(model.Model);
+                _hands.Remove(model);
+            }
+        }
+
+        private void UpdateUsers(KinectFrame frame)
+        {
             var invisibleUsers = new List<UserModel>(_users);
             foreach (var user in frame.Users)
             {
+                if (user.IsTracking && 
+                    cameraProps.ViewModel.SelectedCameraPosition == CameraPositionMode.Head)
+                {
+                    var headJoint = user.Joints[SkeletonJoint.Head];
+                    if (headJoint.fConfidence != 0)
+                    {
+                        var pos = headJoint.position.ToPoint3D();
+                        pos = GetKinectToHelixTransform().ToMatrix3D().Transform(pos);
+
+                        var camera = (PerspectiveCamera) helixView.Camera;
+                        camera.Position = pos;
+                        camera.LookDirection = new Point3D(0,0,0) - camera.Position; // look at kinect
+                        camera.UpDirection = new Vector3D(0,0,1);
+                        camera.FieldOfView = 50.0;
+                    }
+                }
+
                 // update user model
                 var model = _users.FirstOrDefault(u => u.Id == user.Id);
                 if (model == null)
@@ -325,26 +471,6 @@ namespace SceneViewerWPF
             {
                 helixView.Children.Remove(model.Model);
                 _users.Remove(model);
-            }
-
-            if (frame.Floor != null)
-            {
-                var plane = frame.Floor.Value;
-                _floorVisual.Origin = new Point3D(plane.ptPoint.X, plane.ptPoint.Y, plane.ptPoint.Z);
-                _floorVisual.Normal = new Vector3D(plane.vNormal.X, plane.vNormal.Y, plane.vNormal.Z);
-
-                if (!helixView.Children.Contains(_floorVisual))
-                    helixView.Children.Add(_floorVisual);
-            }
-            else
-            {
-                if (helixView.Children.Contains(_floorVisual))
-                    helixView.Children.Remove(_floorVisual);
-            }
-
-            if (freezeUpdates.IsChecked != true)
-            {
-                _dxScene.PointsCloudRenderer.Update(frame, tracker.CameraInfo);
             }
         }
 
@@ -434,7 +560,7 @@ namespace SceneViewerWPF
         {
             var camera = (PerspectiveCamera) helixView.Camera;
 
-            cameraProps.UpdateCamera(camera);
+            cameraProps.ViewModel.UpdateFromCamera(camera);
 
             if (lightProps.ViewModel.Headlight)
             {
@@ -451,7 +577,7 @@ namespace SceneViewerWPF
 
         private void OnSelectedCameraModeChanged(object sender, EventArgs e)
         {
-            helixView.CameraMode = cameraProps.SelectedCameraMode;
+            helixView.CameraMode = cameraProps.ViewModel.SelectedCameraMode;
         }
 
         private void OnSelectedRenderTechChanged(object sender, EventArgs e)

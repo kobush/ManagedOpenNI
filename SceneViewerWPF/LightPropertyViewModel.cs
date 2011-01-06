@@ -8,21 +8,40 @@ namespace SceneViewerWPF
 {
     public class ViewModelLocator
     {
-        static LightPropertyViewModel _lightPropertyViewModel;
+        static readonly LightPropertyViewModel _lightPropertyViewModel;
+        static readonly CameraPropertyViewModel _cameraPropertyViewModel;
 
         public LightPropertyViewModel LightPropertyViewModel
         {
-            get
-            {
-                if (_lightPropertyViewModel == null)
-                    _lightPropertyViewModel = new LightPropertyViewModel();
+            get { return _lightPropertyViewModel; }
+        }
 
-                return _lightPropertyViewModel;
-            }
+        public CameraPropertyViewModel CameraPropertyViewModel
+        {
+            get { return _cameraPropertyViewModel; }
+        }
+
+        static ViewModelLocator()
+        {
+            _lightPropertyViewModel = new LightPropertyViewModel();
+            _cameraPropertyViewModel = new CameraPropertyViewModel();
         }
     }
 
-    public class LightPropertyViewModel : INotifyPropertyChanged
+    public class ViewModelBase : INotifyPropertyChanged
+    {
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void RaisePropertyChanged(string propertyName)
+        {
+            PropertyChangedEventHandler handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+    }
+
+    public class LightPropertyViewModel : ViewModelBase
     {
         private Point3D _position = new Point3D(0, 0, 0f);
         private Vector3D _dir = new Vector3D(0, 0, 1);
@@ -118,14 +137,6 @@ namespace SceneViewerWPF
                 _headlight = value;
                 RaisePropertyChanged("Headlight");
             }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        public void RaisePropertyChanged(string propertyName)
-        {
-            PropertyChangedEventHandler handler = PropertyChanged;
-            if (handler != null) handler(this, new PropertyChangedEventArgs(propertyName));
         }
 
         public DxLight GetLight()

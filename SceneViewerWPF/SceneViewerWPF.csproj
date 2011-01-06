@@ -68,6 +68,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="CameraPropertyViewModel.xaml.cs" />
     <Compile Include="LightPropertyView.xaml.cs">
       <DependentUpon>LightPropertyView.xaml</DependentUpon>
     </Compile>

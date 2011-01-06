@@ -29,6 +29,8 @@ namespace SceneViewerWPF
         private PoseDetectionCapability _poseDetectionCapability;
         private string _calibPose;
         private List<SkeletonJoint> _availableJoints;
+        private GestureGenerator _gestureGenerator;
+        private HandsGenerator _handsGenerator;
 
         public KinectCameraInfo CameraInfo
         {
@@ -185,7 +187,21 @@ namespace SceneViewerWPF
                     if (_skeletonCapability.IsJointAvailable(value))
                         _availableJoints.Add(value);
 
-                //_userGenerator.StartGenerating();
+
+                _gestureGenerator = _niContext.FindExistingNode(NodeType.Gesture) as GestureGenerator;
+                if (_gestureGenerator == null)
+                    throw new InvalidOperationException("Viewer must have an gesture node!");
+
+                _gestureGenerator.GestureRecognized += GestureGenerator_GestureRecognized;
+                _gestureGenerator.GestureProgress += GestureGenerator_GestureProgress;
+
+                _handsGenerator = _niContext.FindExistingNode(NodeType.Hands) as HandsGenerator;
+                if (_handsGenerator == null)
+                    throw new InvalidOperationException("Viewer must have an hands node!");
+
+                _handsGenerator.HandCreate += HandsGenerator_HandCreate;
+                _handsGenerator.HandUpdate += HandsGenerator_HandUpdate;
+                _handsGenerator.HandDestroy += HandsGenerator_HandDestroy;
 
                 // initialize buffers
                 asyncData.AsyncOperation.SynchronizationContext.Send(
@@ -198,6 +214,8 @@ namespace SceneViewerWPF
 
                 _niContext.StartGeneratingAll();
 
+                _gestureGenerator.AddGesture(GESTURE_TO_USE);
+
                 return true;
             }
             catch (Exception ex)
@@ -206,13 +224,55 @@ namespace SceneViewerWPF
             }
         }
 
-        void UserGenerator_LostUser(ProductionNode node, uint id)
-        {
-            Debug.Print("User lost {0}", id);
+        const string GESTURE_TO_USE = "Wave";
 
+        private void GestureGenerator_GestureProgress(ProductionNode node, string gesture, ref Point3D position, float progress)
+        {
+            // none?
+            Debug.Print("Gesture progress: {0} {1}", gesture, progress);
+        }
+
+        private void GestureGenerator_GestureRecognized(ProductionNode node, string gesture, ref Point3D idposition, ref Point3D endPosition)
+        {
+            Debug.Print("Gesture recognized: {0}",gesture);
+            _gestureGenerator.RemoveGesture(gesture);
+            _handsGenerator.StartTracking(ref endPosition);
+        }
+
+        private void HandsGenerator_HandCreate(ProductionNode node, uint id, ref Point3D position, float ftime)
+        {
+            Debug.Print("New Hand: {0} @ ({1:f2},{2:f2},{3:f3}", id, position.X, position.Y, position.Z);
+
+            KinectHandInfo hand = EnsureHand((int) id);
+            hand.Position = position;
+            hand.TimeStamp = TimeSpan.FromSeconds(ftime);
+        }
+
+        private KinectHandInfo EnsureHand(int id)
+        {
             EnsureFrame();
 
-            CurrentFrame.Users.Remove((int)id);
+            if (_currentFrame.Hands.Contains(id))
+                return _currentFrame.Hands[id];
+
+            var hand = new KinectHandInfo(id);
+            _currentFrame.Hands.Add(hand);
+            return hand;
+        }
+
+        private void HandsGenerator_HandUpdate(ProductionNode node, uint id, ref Point3D position, float ftime)
+        {
+            KinectHandInfo hand = EnsureHand((int) id);
+            hand.Position = position;
+            hand.TimeStamp = TimeSpan.FromSeconds(ftime);
+        }
+
+        private void HandsGenerator_HandDestroy(ProductionNode node, uint id, float ftime)
+        {
+            Debug.Print("Lost Hand: {0}", id);
+
+            CurrentFrame.Hands.Remove((int) id);
+            _gestureGenerator.AddGesture(GESTURE_TO_USE);
         }
 
         void UserGenerator_NewUser(ProductionNode node, uint id)
@@ -223,6 +283,15 @@ namespace SceneViewerWPF
             EnsureUser((int)id);
 
             _poseDetectionCapability.StartPoseDetection(_calibPose, id);
+        }
+
+        private void UserGenerator_LostUser(ProductionNode node, uint id)
+        {
+            Debug.Print("User lost {0}", id);
+
+            EnsureFrame();
+
+            CurrentFrame.Users.Remove((int)id);
         }
 
         private void PoseDetectionCapability_PoseDetected(ProductionNode node, string pose, uint id)
@@ -423,10 +492,12 @@ namespace SceneViewerWPF
         public Plane3D? Floor { get; set; }
 
         public KinectUserCollection Users { get; private set; }
+        public KinectHandCollection Hands { get; private set; }
 
         public KinectFrame()
         {
             Users = new KinectUserCollection();
+            Hands = new KinectHandCollection();
         }
     }
 
@@ -455,11 +526,33 @@ namespace SceneViewerWPF
         }
     }
 
+    public class KinectHandInfo
+    {
+        public int Id { get; private set; }
+
+        public KinectHandInfo(int id)
+        {
+            Id = id;
+        }
+
+        public Point3D Position { get; set; }
+        public TimeSpan TimeStamp { get; set; }
+    }
+
+    public class KinectHandCollection : KeyedCollection<int, KinectHandInfo>
+    {
+        protected override int GetKeyForItem(KinectHandInfo item)
+        {
+            return item.Id;
+        }
+    }
+
     public class KinectCameraInfo
     {
         public int XRes { get; set; }
         public int YRes { get; set; }
         public int ZRes { get; set; }
+
         public double ZeroPlaneDistance { get; set; }
         public double ZeroPlanePixelSize { get; set; }
 

@@ -3,14 +3,19 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	xmlns:HelixToolkit="clr-namespace:HelixToolkit;assembly=HelixToolkit"
-	mc:Ignorable="d" 
+	xmlns:HelixToolkit="clr-namespace:HelixToolkit;assembly=HelixToolkit" xmlns:local="clr-namespace:SceneViewerWPF" mc:Ignorable="d" 
 	x:Class="SceneViewerWPF.CameraPropertyView"
 	x:Name="UserControl"
 	d:DesignWidth="209" d:DesignHeight="486" UseLayoutRounding="True">
 
-	<Grid x:Name="LayoutRoot">
+
+    <UserControl.DataContext>
+        <Binding Mode="OneWay" Path="CameraPropertyViewModel" Source="{StaticResource Locator}"/>
+    </UserControl.DataContext>
+
+    <Grid x:Name="LayoutRoot">
 		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
 			<RowDefinition Height="Auto"/>
@@ -20,33 +25,45 @@
 			<RowDefinition Height="Auto"/>
 			<RowDefinition/>
 		</Grid.RowDefinitions>
+        
 		<Grid.ColumnDefinitions>
 			<ColumnDefinition Width="Auto" MinWidth="50" />
 			<ColumnDefinition Width="*" />
 		</Grid.ColumnDefinitions>
+        
 		<TextBlock Text="Position: " VerticalAlignment="Center"/>
-		<TextBlock x:Name="cameraEye" Grid.Column="1" FontWeight="Bold" Margin="0,3"/>
+        <TextBlock Text="{Binding EyePositionText}" Grid.Column="1" FontWeight="Bold" Margin="0,3"/>
 
 		<TextBlock Text="Direction: " Grid.Row="1" VerticalAlignment="Center"/>
-		<TextBlock x:Name="cameraDir" Grid.Column="1" Grid.Row="1" FontWeight="Bold" Margin="0,3"/>
+        <TextBlock Text="{Binding LookDirectionText}" Grid.Column="1" Grid.Row="1" FontWeight="Bold" Margin="0,3"/>
 
 		<TextBlock Text="Up: " Grid.Row="2" VerticalAlignment="Center"/>
-		<TextBlock x:Name="cameraUp" Grid.Column="1" Grid.Row="2" FontWeight="Bold" Margin="0,3"/>
+        <TextBlock Text="{Binding UpDirectionText}" Grid.Column="1" Grid.Row="2" FontWeight="Bold" Margin="0,3"/>
 		
 		<TextBlock Text="Near plane: " Grid.Row="3" VerticalAlignment="Center"/>
-		<TextBlock x:Name="nearPlane" Grid.Column="1" Grid.Row="3" FontWeight="Bold" Margin="0,3"/>
+        <TextBlock Text="{Binding NearPlane, StringFormat=F1}" Grid.Column="1" Grid.Row="3" FontWeight="Bold" Margin="0,3"/>
 
 		<TextBlock Text="Far plane: " Grid.Row="4" VerticalAlignment="Center"/>
-		<TextBlock x:Name="farPlane" Grid.Column="1" Grid.Row="4" FontWeight="Bold" Margin="0,3"/>
+        <TextBlock Text="{Binding FarPlane, StringFormat=F1}" Grid.Column="1" Grid.Row="4" FontWeight="Bold" Margin="0,3"/>
 
 		<TextBlock Text="FOV: " Grid.Row="5" VerticalAlignment="Center"/>
-		<TextBlock x:Name="fov" Grid.Column="1" Grid.Row="5" FontWeight="Bold" Margin="0,3"/>
+		<TextBlock Text="{Binding FieldOfView, StringFormat=F1}" Grid.Column="1" Grid.Row="5" FontWeight="Bold" Margin="0,3"/>
 		
-		<TextBlock Text="Mode: " Grid.Row="6" VerticalAlignment="Center"/>
-		<ComboBox x:Name="cameraMode" Grid.Column="1" Grid.Row="6" Padding="4,2,4,3" Margin="0,2" SelectionChanged="OnCameraModeSelectionChanged">
+		<TextBlock Text="Camera Mode: " Grid.Row="6" VerticalAlignment="Center"/>
+		<ComboBox x:Name="cameraMode" Grid.Column="1" Grid.Row="6" Padding="4,2,4,3" Margin="0,2" 
+                  SelectedValue="{Binding SelectedCameraMode, Mode=TwoWay}" SelectedValuePath="Tag" >
 			<ComboBoxItem Tag="{x:Static HelixToolkit:CameraMode.Inspect}" IsSelected="True" Content="Inspect"/>
 			<ComboBoxItem Tag="{x:Static HelixToolkit:CameraMode.WalkAround}" Content="Walk around"/>
 			<ComboBoxItem Tag="{x:Static HelixToolkit:CameraMode.FixedPosition}" Content="Fixed position"/>
+		</ComboBox>	
+        
+        <TextBlock Text="Position Mode: " Grid.Row="7" VerticalAlignment="Center"/>
+		<ComboBox x:Name="positionMode" Grid.Column="1" Grid.Row="7" Padding="4,2,4,3" Margin="0,2" 
+                  SelectedValue="{Binding SelectedCameraPosition, Mode=TwoWay}" SelectedValuePath="Tag" >
+			<ComboBoxItem Tag="{x:Static local:CameraPositionMode.Free}" IsSelected="True" Content="Free"/>
+            <ComboBoxItem Tag="{x:Static local:CameraPositionMode.KinectIR}" Content="Kinect IR Camera"/>
+            <ComboBoxItem Tag="{x:Static local:CameraPositionMode.KinectRGB}" Content="Kinect RGB Camera"/>
+            <ComboBoxItem Tag="{x:Static local:CameraPositionMode.Head}" Content="User Head"/>
 		</ComboBox>
 	</Grid>
 </UserControl>
