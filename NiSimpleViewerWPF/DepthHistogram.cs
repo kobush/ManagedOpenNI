@@ -25,9 +25,10 @@ namespace NiSimpleViewerWPF
             {
                 for (int x = 0; x < depthMeta.XRes; x++)
                 {
-                    if (*ptrDepth != 0)
+                    var val = *ptrDepth;
+                    if (val != 0)
                     {
-                        _depthHist[*ptrDepth]++;
+                        _depthHist[val]++;
                         numPoints++;
                     }
                     ptrDepth++;

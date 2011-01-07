@@ -30,6 +30,7 @@ namespace NiSimpleViewerWPF
             image.Source = null;
             depth.Source = null;
             scene.Source = null;
+            hand.Source = null;
         }
 
         void OnTracker_UpdateViewPort(object sender, EventArgs e)
@@ -39,6 +40,7 @@ namespace NiSimpleViewerWPF
             image.Source = _tracker.RgbImageSource;
             depth.Source = _tracker.DepthImageSource;
             scene.Source = _tracker.SceneImageSource;
+            hand.Source = _tracker.HandImageSource;
             fpsText.Text = _tracker.FramesPerSecond.ToString("F1");
         }
     }

@@ -35,6 +35,9 @@
 
             <Image x:Name="scene" RenderOptions.BitmapScalingMode="LowQuality" 
                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Uniform" Opacity="0.5" />
+            
+            <Image x:Name="hand" RenderOptions.BitmapScalingMode="LowQuality" 
+                   HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Uniform" Opacity="0.5" />
         </Grid>
         
         <TextBlock x:Name="waitText" Text="Initializing Kinect. Please wait..." Grid.Row="1" FontSize="18" 

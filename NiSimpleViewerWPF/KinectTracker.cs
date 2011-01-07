@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -20,6 +21,7 @@ namespace NiSimpleViewerWPF
         private WriteableBitmap _rgbImageSource;
         private WriteableBitmap _depthImageSource;
         private WriteableBitmap _sceneImageSource;
+        private WriteableBitmap _handImageSource;
 
         private AsyncStateData _currentState;
         private Context _niContext;
@@ -31,9 +33,14 @@ namespace NiSimpleViewerWPF
         //private SceneMetaData _sceneMeta;
         //private UserGenerator _userNode;
 
+        private GestureGenerator _gestureGenerator;
+        private HandsGenerator _handsGenerator;
+
         private readonly FrameCounter _frameCounter = new FrameCounter();
         private readonly DepthHistogram _depthHist = new DepthHistogram();
         private readonly SceneMap _sceneMap = new SceneMap();
+        private readonly HandsDetector _handsDetector = new HandsDetector();
+
 
         private class AsyncStateData
         {
@@ -60,6 +67,11 @@ namespace NiSimpleViewerWPF
         public ImageSource SceneImageSource
         {
             get { return _sceneImageSource; }
+        }
+
+        public ImageSource HandImageSource
+        {
+            get { return _handImageSource; }
         }
 
         public double FramesPerSecond { get { return _frameCounter.FramesPerSecond; } }
@@ -121,6 +133,8 @@ namespace NiSimpleViewerWPF
                 _depthHist.Update(_depthMeta);
                 //_sceneMap.Update(_sceneMeta);
 
+                _handsDetector.Update(_depthMeta);
+
                 _frameCounter.AddFrame();
 
                 // continue update on UI thread
@@ -135,6 +149,8 @@ namespace NiSimpleViewerWPF
 
                         //CopyWritableBitmap(_sceneMeta, _sceneImageSource);
                         _sceneMap.Paint(_sceneNode, _depthMeta, _sceneImageSource);
+
+                        _handsDetector.Paint(_handImageSource);
 
                         InvokeUpdateViewPort(EventArgs.Empty);
                      }, null);
@@ -153,20 +169,10 @@ namespace NiSimpleViewerWPF
             _imageMeta = new ImageMetaData();
             _imageNode.GetMetaData(_imageMeta);
 
-            // create the image bitmap source on 
-            asyncData.AsyncOperation.SynchronizationContext.Send(
-                md => CreateImageBitmap(_imageMeta, out _rgbImageSource), 
-                null);
-
             // add depth node
             _depthNode = (DepthGenerator) _niContext.FindExistingNode(NodeType.Depth);
-
             _depthMeta = new DepthMetaData();
             _depthNode.GetMetaData(_depthMeta);
-
-            asyncData.AsyncOperation.SynchronizationContext.Send(
-                state => CreateImageBitmap(_depthMeta, out _depthImageSource, PixelFormats.Pbgra32), 
-                null);
 
             // add scene node
             _sceneNode = (SceneAnalyzer) _niContext.FindExistingNode(NodeType.Scene);
@@ -174,9 +180,72 @@ namespace NiSimpleViewerWPF
             //_sceneMeta = new SceneMetaData();
             //_sceneNode.GetMetaData(_sceneMeta);
 
+            _gestureGenerator = _niContext.FindExistingNode(NodeType.Gesture) as GestureGenerator;
+            if (_gestureGenerator == null)
+                throw new InvalidOperationException("Viewer must have an gesture node!");
+
+            _gestureGenerator.GestureRecognized += GestureGenerator_GestureRecognized;
+            _gestureGenerator.GestureProgress += GestureGenerator_GestureProgress;
+
+            _handsGenerator = _niContext.FindExistingNode(NodeType.Hands) as HandsGenerator;
+            if (_handsGenerator == null)
+                throw new InvalidOperationException("Viewer must have an hands node!");
+
+            _handsGenerator.HandCreate += HandsGenerator_HandCreate;
+            _handsGenerator.HandUpdate += HandsGenerator_HandUpdate;
+            _handsGenerator.HandDestroy += HandsGenerator_HandDestroy;
+
+            _handsDetector.Init(_depthNode, _depthMeta);
+
+            // create bitmaps on render thread
             asyncData.AsyncOperation.SynchronizationContext.Send(
-                state => CreateImageBitmap(_depthMeta, out _sceneImageSource, PixelFormats.Pbgra32),
+                state =>
+                    {
+                        CreateImageBitmap(_imageMeta, out _rgbImageSource);
+                        CreateImageBitmap(_depthMeta, out _depthImageSource, PixelFormats.Pbgra32);
+                        CreateImageBitmap(_depthMeta, out _sceneImageSource, PixelFormats.Pbgra32);
+                        CreateImageBitmap(_depthMeta, out _handImageSource, PixelFormats.Pbgra32);
+                    },
                 null);
+
+            // start generators
+            _niContext.StartGeneratingAll();
+            _gestureGenerator.AddGesture(GESTURE_TO_USE);
+        }
+
+        const string GESTURE_TO_USE = "Wave";
+
+        private void GestureGenerator_GestureProgress(ProductionNode node, string gesture, ref Point3D position, float progress)
+        {
+            // none?
+            Debug.Print("Gesture progress: {0} {1}", gesture, progress);
+        }
+
+        private void GestureGenerator_GestureRecognized(ProductionNode node, string gesture, ref Point3D idposition, ref Point3D endPosition)
+        {
+            Debug.Print("Gesture recognized: {0}", gesture);
+            _gestureGenerator.RemoveGesture(gesture);
+            _handsGenerator.StartTracking(ref endPosition);
+        }
+
+        private void HandsGenerator_HandCreate(ProductionNode node, uint id, ref Point3D position, float ftime)
+        {
+            Debug.Print("New Hand: {0} @ ({1:f2},{2:f2},{3:f3}", id, position.X, position.Y, position.Z);
+
+            _handsDetector.UpadeHand((int)id, position, _depthNode.ConvertRealWorldToProjective(position));
+        }
+
+        private void HandsGenerator_HandUpdate(ProductionNode node, uint id, ref Point3D position, float ftime)
+        {
+            _handsDetector.UpadeHand((int)id, position, _depthNode.ConvertRealWorldToProjective(position));
+        }
+
+        private void HandsGenerator_HandDestroy(ProductionNode node, uint id, float ftime)
+        {
+            Debug.Print("Lost Hand: {0}", id);
+
+            _handsDetector.RemoveHand((int) id);
+            _gestureGenerator.AddGesture(GESTURE_TO_USE);
         }
 
         private static void CreateImageBitmap(MapMetaData imageMd, out WriteableBitmap writeableBitmap, PixelFormat format)
@@ -238,8 +307,9 @@ namespace NiSimpleViewerWPF
             return b;
         }
 */
+
 /*
-        private void CreateImageBitmap(XnMImageMetaData imageMd, out InteropBitmap interopBitmap, out Bitmap bitmap)
+        private void CreateInteropBitmap(XnMImageMetaData imageMd, out InteropBitmap interopBitmap, out Bitmap bitmap)
         {
             var format = MapPixelFormat(imageMd.PixelFormat);
             var bmpWidth = (int)imageMd.FullXRes;

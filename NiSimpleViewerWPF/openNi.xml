@@ -26,11 +26,9 @@
     </Node>
 
 		<Node type="Scene" />
-<!--
-		<Node type="User" />
-		<Node type="Gesture"/>
+    <Node type="User" />
+    <Node type="Gesture"/>
 		<Node type="Hands"/>
--->
 
 	</ProductionNodes>
 </OpenNI>
