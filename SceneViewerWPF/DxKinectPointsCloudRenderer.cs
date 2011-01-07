@@ -10,17 +10,45 @@ using MapFlags = SlimDX.Direct3D10.MapFlags;
 
 namespace SceneViewerWPF
 {
-    public interface IRenderer<in T> : IDisposable 
-        where T : class
+    public abstract class DxObject
     {
-        void Update(float dt, float time);
+        public abstract void Update(float dt, float time);
+        public abstract void Render(DxCamera camera);
+        public Matrix World { get; set; }
+        
+      /*  public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~DxObject()
+        {
+            Dispose(false);
+        }
+
+        protected abstract void Dispose(bool disposing);*/
+    }
+
+    public interface IRenderer
+    {
+        
+    }
+
+    public interface IRenderer<in T> : IRenderer, IDisposable 
+        where T : DxObject
+    {
         void Render(T obj, DxCamera camera);
     }
 
-    public class DxKinectPointsCloud
+    public class DxKinectPointsCloud : DxObject
     {
-        public DxKinectPointsCloud()
+        private readonly DxScene _scene;
+        private IKinectPointsCloudRenderer _renderer;
+
+        public DxKinectPointsCloud(DxScene scene)
         {
+            _scene = scene;
             World = Matrix.Identity;
             UserAlpha = 1f;
             BackgroundAlpha = 0.5f;
@@ -48,7 +76,40 @@ namespace SceneViewerWPF
 
         public float UserAlpha { get; set; }
 
-        public Matrix World { get; set; }
+        public IKinectPointsCloudRenderer Renderer
+        {
+            get { return _renderer; }
+        }
+
+        public void CrateRenderer(KinectPointsRendererType rendererType)
+        {
+            var oldRenderer = _renderer;
+
+            // create new renderer
+            if (rendererType == KinectPointsRendererType.Billboard)
+                _renderer = new DxKinectPointsCloudRenderer(_scene.Device);
+                //_renderer = _scene.RendererManager.Create<DxKinectPointsCloudRenderer>();
+            else if (rendererType == KinectPointsRendererType.Mesh)
+                //_renderer = _scene.RendererManager.Create<DxKinectPointsCloudRenderer>(); 
+                _renderer = new DxKinectPointsCloudRenderer(_scene.Device); 
+
+            // destroy old renderer
+            if (oldRenderer != null)
+            {
+                oldRenderer.Dispose();
+            }
+        }
+
+        public override void Update(float dt, float time)
+        {
+            // do nothing
+        }
+
+        public override void Render(DxCamera camera)
+        {
+            if (_renderer != null)
+                _renderer.Render(this, camera);
+        }
     }
 
     public interface IKinectPointsCloudRenderer : IRenderer<DxKinectPointsCloud>
@@ -150,7 +211,7 @@ namespace SceneViewerWPF
 
             ShaderSignature signature = _renderTech.GetPassByIndex(0).Description.Signature;
             _inputLayout = new InputLayout(_dxDevice, signature,
-                    new[] { new InputElement("POSITION", 0, SlimDX.DXGI.Format.R16G16_SInt, 0, 0)
+                    new[] { new InputElement("POSITION", 0, Format.R16G16_SInt, 0, 0)
                 });
         }
 

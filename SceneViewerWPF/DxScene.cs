@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Drawing;
 using SlimDX;
 using SlimDX.Direct3D10;
@@ -11,7 +13,33 @@ using SlimDX.D3DCompiler;
 
 namespace SceneViewerWPF
 {
-    class DxScene : IDisposable
+    public class DxRendererManager : IDisposable
+    {
+        private readonly Device _device;
+
+        public DxRendererManager(Device device)
+        {
+            _device = device;
+        }
+
+        public T Create<T>() where T : IRenderer
+        {
+            //return new DxKinectMeshRenderer(_device);
+            return default(T);
+        }
+
+        public void Dispose()
+        {
+            ReleaseAll();
+        }
+
+        private void ReleaseAll()
+        {
+            //
+        }
+    }
+
+    public class DxScene : IDisposable
     {
         private Device _dxDevice;
         private RenderTargetView _dxRenderView;
@@ -19,13 +47,10 @@ namespace SceneViewerWPF
         
         private Font _dxFont;
         //private DxEffect _dxEffect;
-        private DxCube _dxCube;
-
-        private IKinectPointsCloudRenderer _kinectPointsRenderer;
-        private DxKinectPointsCloud _kinectPoints = new DxKinectPointsCloud();
-
         private DxParticleSystemRenderer _fire;
+
         private DxTextureManager _textureManager;
+        private DxRendererManager _rendererManager;
         private float _lastTime;
 
         public int ClientHeight { get; set; }
@@ -44,6 +69,23 @@ namespace SceneViewerWPF
             set { _wireframe = value; }
         }
 
+        private readonly List<DxObject> _children = new List<DxObject>();
+
+        public IList<DxObject> Children
+        {
+            get { return _children; }
+        }
+
+        public DxRendererManager RendererManager
+        {
+            get { return _rendererManager; }
+        }
+
+        public Device Device
+        {
+            get { return _dxDevice; }
+        }
+
         public DxScene()
         {
             ClientWidth = 100;
@@ -51,11 +93,6 @@ namespace SceneViewerWPF
             Camera = new DxCamera();
 
             InitD3D();
-        }
-
-        public void Dispose()
-        {
-            DestroyD3D();
         }
 
         private void InitD3D()
@@ -81,42 +118,12 @@ namespace SceneViewerWPF
             _dxFont = new Font(_dxDevice, fontDesc);
 
             _textureManager = new DxTextureManager(_dxDevice);
-
-//            _dxEffect = new DxEffect(_dxDevice);
-            _dxCube = new DxCube(_dxDevice);
-            CrateKinectPointsRenderer(KinectPointsRendererType.Billboard);
+            _rendererManager = new DxRendererManager(_dxDevice);
 
             ShaderResourceView texArray = _textureManager.CreateTexArray("flares", @"Assets\flare0.dds");
             _fire = new DxParticleSystemRenderer(_dxDevice, texArray, 500);
 
             _dxDevice.Flush();
-        }
-
-        public IKinectPointsCloudRenderer PointsCloudRenderer
-        {
-            get { return _kinectPointsRenderer; }
-        }
-
-        public DxKinectPointsCloud PointsCloud
-        {
-            get { return _kinectPoints; }
-        }
-
-        public void CrateKinectPointsRenderer(KinectPointsRendererType rendererType)
-        {
-            var oldRenderer = _kinectPointsRenderer;
-
-            // create new renderer
-            if (rendererType == KinectPointsRendererType.Billboard)
-                _kinectPointsRenderer = new DxKinectPointsCloudRenderer(_dxDevice);
-            else if (rendererType == KinectPointsRendererType.Mesh)
-                _kinectPointsRenderer = new DxKinectMeshRenderer(_dxDevice);
-
-            // destroy old renderer
-            if (oldRenderer != null)
-            {
-                oldRenderer.Dispose();
-            }
         }
 
         private void EnsureOutputBuffers()
@@ -130,7 +137,6 @@ namespace SceneViewerWPF
                     SharedTexture.Dispose();
                     SharedTexture = null;
                 }
-
 
                 var colordesc = new Texture2DDescription
                 {
@@ -199,28 +205,109 @@ namespace SceneViewerWPF
 
                 var descDsv = new DepthStencilViewDescription();
                 descDsv.Format = depthDesc.Format;
-                if (depthDesc.SampleDescription.Count > 1)
-                {
-                    descDsv.Dimension = DepthStencilViewDimension.Texture2DMultisampled;
-                }
-                else
-                {
-                    descDsv.Dimension = DepthStencilViewDimension.Texture2D;
-                }
                 descDsv.MipSlice = 0;
+                descDsv.Dimension = depthDesc.SampleDescription.Count > 1 ? 
+                    DepthStencilViewDimension.Texture2DMultisampled : DepthStencilViewDimension.Texture2D;
 
                 // create depth/stencil view
                 _dxDepthStencilView = new DepthStencilView(_dxDevice, DepthTexture, descDsv);
             }
         }
 
+        public void Render(float gameTime, int width, int height)
+        {
+            var dt = gameTime - _lastTime;
+            _lastTime = gameTime;
+
+            ClientWidth = width;
+            ClientHeight = height;
+
+            // make sure buffers are initialized with current size
+            EnsureOutputBuffers();
+
+            // bind the views to the output merger stage
+            _dxDevice.OutputMerger.SetTargets(_dxDepthStencilView, _dxRenderView);
+
+            // clear buffers
+            _dxDevice.ClearDepthStencilView(_dxDepthStencilView, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
+            _dxDevice.ClearRenderTargetView(_dxRenderView, new Color4(0f, 0f, 0f, 0f)); // uses transparent fill color
+
+            // set rasterization parameters
+            var rsd = new RasterizerStateDescription
+            {
+                //IsAntialiasedLineEnabled = true,
+                IsFrontCounterclockwise = true,
+                CullMode = CullMode.None,
+                FillMode = (_wireframe) ? FillMode.Wireframe : FillMode.Solid
+            };
+
+            RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);
+            _dxDevice.Rasterizer.State = rsdState;
+
+            // set viewport
+            _dxDevice.Rasterizer.SetViewports(new Viewport(0, 0, ClientWidth, ClientHeight, 0.0f, 1.0f));
+
+            // update camera viewport
+            Camera.Update(ClientWidth, ClientHeight);
+
+            foreach (var child in _children)
+            {
+                child.Update(dt, gameTime);
+                child.Render(Camera);
+            }
+
+/*
+            _fire.Update(dt, gameTime);
+            _fire.Render(Camera);
+*/
+
+/*
+            _dxCube.Prepare();
+            var xRes = 30;
+            var yRes = 30;
+
+*/
+
+
+/*
+            var black = new Color4(1f, 0, 0, 0);
+            var rect = new Rectangle(5, 5 + arg % 100, 0, 0);
+            _dxFont.Draw(null, "Hello from Direct3D", rect, FontDrawFlags.NoClip, black);
+*/
+
+            _dxDevice.Flush();
+        }
+
+        
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~DxScene()
+        {
+            Dispose(false);
+        }
+
+        protected void Dispose(bool disposing)
+        {
+            DestroyD3D();
+        }
+
         private void DestroyD3D()
         {
-            _textureManager.Dispose();
-            _dxCube.Dispose();
-            //_dxEffect.Dispose();
-            _kinectPointsRenderer.Dispose();
+            if (_textureManager != null)
+            {
+                _textureManager.Dispose();
+                _textureManager = null;
+            }
 
+            if (_rendererManager != null)
+            {
+                _rendererManager.Dispose();
+                _rendererManager = null;
+            }
 
             if (_dxFont != null)
             {
@@ -257,75 +344,6 @@ namespace SceneViewerWPF
                 _dxDevice.Dispose();
                 _dxDevice = null;
             }
-        }
-
-        public void Render(float gameTime, int width, int height)
-        {
-            var dt = gameTime - _lastTime;
-            _lastTime = gameTime;
-
-            ClientWidth = width;
-            ClientHeight = height;
-
-            BeginScene();
-            Camera.Update(ClientWidth, ClientHeight);
-
-            _kinectPointsRenderer.Update(dt, gameTime);
-            _kinectPointsRenderer.Render(_kinectPoints, Camera);
-
-/*
-            _fire.Update(dt, gameTime);
-            _fire.Render(Camera);
-*/
-
-/*
-            _dxCube.Prepare();
-            var xRes = 30;
-            var yRes = 30;
-
-*/
-
-
-/*
-            var black = new Color4(1f, 0, 0, 0);
-            var rect = new Rectangle(5, 5 + arg % 100, 0, 0);
-            _dxFont.Draw(null, "Hello from Direct3D", rect, FontDrawFlags.NoClip, black);
-*/
-
-            EndScene();
-        }
-
-        private void BeginScene()
-        {
-            // make sure buffers are initialized with current size
-            EnsureOutputBuffers();
-
-            // bind the views to the output merger stage
-            _dxDevice.OutputMerger.SetTargets(_dxDepthStencilView, _dxRenderView);
-
-            // clear buffers
-            _dxDevice.ClearDepthStencilView(_dxDepthStencilView, DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
-            _dxDevice.ClearRenderTargetView(_dxRenderView, new Color4(0f, 0f, 0f, 0f)); // uses transparent fill color
-
-            // set rasterization parameters
-            var rsd = new RasterizerStateDescription
-            {
-                //IsAntialiasedLineEnabled = true,
-                IsFrontCounterclockwise = true,
-                CullMode = CullMode.None,
-                FillMode = (_wireframe) ? FillMode.Wireframe : FillMode.Solid
-            };
-
-            RasterizerState rsdState = RasterizerState.FromDescription(_dxDevice, rsd);
-            _dxDevice.Rasterizer.State = rsdState;
-
-            // set viewport
-            _dxDevice.Rasterizer.SetViewports(new Viewport(0, 0, ClientWidth, ClientHeight, 0.0f, 1.0f));
-        }
-
-        private void EndScene()
-        {
-            _dxDevice.Flush();
         }
     }
 

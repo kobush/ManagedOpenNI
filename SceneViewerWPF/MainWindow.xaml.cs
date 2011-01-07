@@ -264,7 +264,7 @@ namespace SceneViewerWPF
 
         private readonly List<UserModel> _users = new List<UserModel>();
         private readonly List<HandModel> _hands = new List<HandModel>();
-        private PlaneVisual3D _floorVisual;
+        private readonly PlaneVisual3D _floorVisual;
 
         public MainWindow()
         {
@@ -291,12 +291,16 @@ namespace SceneViewerWPF
             busyIndicator.IsBusy = true;
 
             _dxImageContainer = new D3DImageSlimDX();
-            _dxImageContainer.IsFrontBufferAvailableChanged += _D3DImageContainer_IsFrontBufferAvailableChanged;
+            _dxImageContainer.IsFrontBufferAvailableChanged += D3DImageContainer_IsFrontBufferAvailableChanged;
 
             dxImage.Source = _dxImageContainer;
 
             _dxScene = new DxScene();
             _dxImageContainer.SetBackBufferSlimDX(_dxScene.SharedTexture);
+
+            _kinectPoints = new DxKinectPointsCloud(_dxScene);
+            _kinectPoints.CrateRenderer(KinectPointsRendererType.Billboard);
+            _dxScene.Children.Add(_kinectPoints);
 
             helixView.CameraChanged += delegate { UpdateCameraPosition(); };
             SetCameraPosition();
@@ -310,6 +314,14 @@ namespace SceneViewerWPF
             _kinectTracker.TrackingUpdated += OnKinectTrackingUpdated;
             _kinectTracker.TrackinkgCompleted += OnKinectTrackingCompleted;
             _kinectTracker.StartTracking();
+        }
+
+        private DxKinectPointsCloud _kinectPoints;
+
+
+        public DxKinectPointsCloud PointsCloud
+        {
+            get { return _kinectPoints; }
         }
 
         private void SetCameraPosition()
@@ -360,7 +372,7 @@ namespace SceneViewerWPF
 
             if (_dxScene == null) return;
             var tracker = ((KinectTracker) sender);
-            _dxScene.PointsCloudRenderer.Init(tracker.CurrentFrame, tracker.CameraInfo);
+            _kinectPoints.Renderer.Init(tracker.CurrentFrame, tracker.CameraInfo);
         }
 
         private void OnKinectTrackingUpdated(object sender, EventArgs e)
@@ -374,7 +386,7 @@ namespace SceneViewerWPF
 
             if (freezeUpdates.IsChecked != true && _dxScene != null)
             {
-                _dxScene.PointsCloudRenderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
+                _kinectPoints.Renderer.Update(tracker.CurrentFrame, tracker.CameraInfo);
             }
         }
 
@@ -499,7 +511,7 @@ namespace SceneViewerWPF
             }
         }
 
-        void _D3DImageContainer_IsFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
+        void D3DImageContainer_IsFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
             // This fires when the screensaver kicks in, the machine goes into sleep or hibernate
             // and any other catastrophic losses of the d3d device from WPF's point of view
@@ -582,7 +594,7 @@ namespace SceneViewerWPF
 
         private void OnSelectedRenderTechChanged(object sender, EventArgs e)
         {
-            _dxScene.CrateKinectPointsRenderer(renderProps.SelectedRenderTech);
+            _kinectPoints.CrateRenderer(renderProps.SelectedRenderTech);
         }
 
         private void OnRendererPropertyChanged(object sender, EventArgs e)
@@ -594,7 +606,7 @@ namespace SceneViewerWPF
 
         private static SlimDX.Matrix GetKinectToHelixTransform()
         {
-            var scale = (float)KinectToHelixScale;
+            const float scale = (float)KinectToHelixScale;
             var world = SlimDX.Matrix.Scaling(scale, scale, scale);
             world *= SlimDX.Matrix.RotationZ(D3DExtensions.DegreeToRadian(-90));
             world *= SlimDX.Matrix.RotationY(D3DExtensions.DegreeToRadian(-90));
@@ -607,24 +619,21 @@ namespace SceneViewerWPF
             //if (renderProps.Scale != null)
             //    _dxScene.PointsCloud.Scale = renderProps.Scale.Value;
 
-            _dxScene.PointsCloud.World = GetKinectToHelixTransform();
+            _kinectPoints.World = GetKinectToHelixTransform();
 
-            _dxScene.PointsCloud.FillColor =
+            _kinectPoints.FillColor =
                 new Vector4(renderProps.FillColor.ScR,
                             renderProps.FillColor.ScG,
                             renderProps.FillColor.ScB,
                             (float) (1.0 - renderProps.TextureAlpha));
 
-            _dxScene.PointsCloud.UserAlpha = (float) renderProps.UserAlpha;
-            _dxScene.PointsCloud.BackgroundAlpha = (float) renderProps.BackgroundAlpha;
+            _kinectPoints.UserAlpha = (float)renderProps.UserAlpha;
+            _kinectPoints.BackgroundAlpha = (float)renderProps.BackgroundAlpha;
         }
 
         private void OnLightPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
         {
-            if (_dxScene != null)
-            {
-                _dxScene.PointsCloud.Light = lightProps.ViewModel.GetLight();
-            }
+            _kinectPoints.Light = lightProps.ViewModel.GetLight();
         }
     }
 }
