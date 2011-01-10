@@ -6,6 +6,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -17,16 +18,72 @@
             <TextBlock x:Name="fpsText" />
         </StackPanel>
         
-        <StackPanel Grid.Column="1" Grid.RowSpan="2" MinWidth="200">
+        <StackPanel Grid.Column="1" Grid.Row="1" MinWidth="200">
             <Label Content="Image opacity:"></Label>
             <Slider Value="{Binding ElementName=image, Path=Opacity}" Minimum="0" Maximum="1" IsSnapToTickEnabled="False"></Slider>
             <Label Content="Depth opacity:"></Label>
             <Slider Value="{Binding ElementName=depth, Path=Opacity}" Minimum="0" Maximum="1" IsSnapToTickEnabled="False"></Slider>
             <Label Content="Scene opacity:"></Label>
             <Slider Value="{Binding ElementName=scene, Path=Opacity}" Minimum="0" Maximum="1" IsSnapToTickEnabled="False"></Slider>
+            <Label Content="Hand opacity:"></Label>
+            <Slider Value="{Binding ElementName=handImage, Path=Opacity}" Minimum="0" Maximum="1" IsSnapToTickEnabled="False"></Slider>
         </StackPanel>
 
-        <Grid Background="Gray" Grid.Row="1" Margin="3" MinWidth="640" MinHeight="480">
+        <Grid Grid.Column="1" Grid.Row="2" MinWidth="280" Margin="4" TextBlock.FontSize="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Hand recognizer" FontWeight="Bold"/>
+            
+            <TextBlock Grid.Row="1" Text="Active Hand" />
+            <TextBlock Grid.Row="1" Grid.Column="1" x:Name="activeHand" />
+
+            <TextBlock Grid.Row="2" Text="Position: " />
+            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="handPosition" />
+
+            <TextBlock Grid.Row="3" Text="Blob area: " />
+            <TextBlock Grid.Row="3" Grid.Column="1" x:Name="handBlobArea" />
+
+            <TextBlock Grid.Row="4" Text="Hull area: " />
+            <TextBlock Grid.Row="4" Grid.Column="1" x:Name="handHullArea" />
+
+            <TextBlock Grid.Row="5" Text="Blob / Hull: " />
+            <TextBlock Grid.Row="5" Grid.Column="1" x:Name="handAreaRatio" />
+            
+            <TextBlock Grid.Row="6" Text="Minimum: " />
+            <TextBlock Grid.Row="6" Grid.Column="1" x:Name="handAreaRatioMin" />
+            
+            <TextBlock Grid.Row="7" Text="Maximum: " />
+            <TextBlock Grid.Row="7" Grid.Column="1" x:Name="handAreaRatioMax" />
+            
+            <Button Grid.Row="8" Grid.ColumnSpan="2" Content="Reset" Click="ResetRatioClick"></Button>
+
+            <TextBlock Grid.Row="9" Text="Threshold: " />
+            <TextBlock Grid.Row="9" Grid.Column="1" x:Name="thresholdValue"/>
+            
+            <Slider x:Name="thresholdSlider" Grid.Row="10" Minimum="0" Maximum="100" Value="86" IsSnapToTickEnabled="False"></Slider>
+
+            <TextBlock Grid.Row="11" Text="Answer:"/>
+            <TextBlock Grid.Row="11" Grid.Column="1" FontWeight="Bold" FontSize="24" x:Name="answer" />
+        </Grid>
+
+
+        <Grid Background="Gray" Grid.Row="1" Grid.RowSpan="2" Margin="3" MinWidth="640" MinHeight="480">
             <Image x:Name="image" RenderOptions.BitmapScalingMode="LowQuality" 
                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Uniform"  />
         
@@ -36,11 +93,11 @@
             <Image x:Name="scene" RenderOptions.BitmapScalingMode="LowQuality" 
                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Uniform" Opacity="0.5" />
             
-            <Image x:Name="hand" RenderOptions.BitmapScalingMode="LowQuality" 
+            <Image x:Name="handImage" RenderOptions.BitmapScalingMode="LowQuality" 
                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Stretch="Uniform" Opacity="0.5" />
         </Grid>
         
-        <TextBlock x:Name="waitText" Text="Initializing Kinect. Please wait..." Grid.Row="1" FontSize="18" 
+        <TextBlock x:Name="waitText" Text="Initializing Kinect. Please wait..." Grid.Row="1" Grid.RowSpan="2" FontSize="18" 
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
     </Grid>
 </Window>

@@ -41,6 +41,7 @@ namespace NiSimpleViewerWPF
         private readonly SceneMap _sceneMap = new SceneMap();
         private readonly HandsDetector _handsDetector = new HandsDetector();
 
+        public HandsDetector HandsDetector { get { return _handsDetector; } }
 
         private class AsyncStateData
         {
@@ -191,6 +192,7 @@ namespace NiSimpleViewerWPF
             if (_handsGenerator == null)
                 throw new InvalidOperationException("Viewer must have an hands node!");
 
+            _handsGenerator.SetSmoothing(0.05f);
             _handsGenerator.HandCreate += HandsGenerator_HandCreate;
             _handsGenerator.HandUpdate += HandsGenerator_HandUpdate;
             _handsGenerator.HandDestroy += HandsGenerator_HandDestroy;
